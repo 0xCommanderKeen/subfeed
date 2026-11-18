@@ -15,6 +15,16 @@ export { MATCH_COUNT_CAP } from './db/listing.mjs';
 
 export const DB_PATH = join(import.meta.dirname, '..', 'data', 'subfeed.db');
 
+// "ok", or the problems SQLite found, one per line.
+export function quickCheck(file) {
+  const db = new DatabaseSync(file, { readOnly: true });
+  try {
+    return db.prepare('PRAGMA quick_check').all().map((r) => r.quick_check).join('\n');
+  } finally {
+    db.close();
+  }
+}
+
 // Switching a new file to WAL needs an exclusive lock, and SQLite answers SQLITE_BUSY at once, without busy_timeout,
 // while another process opening the same file holds a lock. Once one of them has switched, the setting is a no-op.
 function useWal(db) {

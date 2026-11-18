@@ -94,6 +94,37 @@ test('export keeps unsubscribed, favorite and hidden-topic flags, and a fresh da
   assert.deepEqual(summary(fresh), summary(db));
 });
 
+test('export keeps the mute and route rules, and a fresh database seeded from it has the same rules', () => {
+  const db = seeded();
+  db.addRule({ kind: 'mute', pattern: 'Weekly Q&A', topicId: 'paint' });
+  db.addRule({ kind: 'route', pattern: 'Paint Table', channelId: B, topicId: 'paint' });
+  const exported = exportChannels(db);
+  assert.match(exported, /\n  "rules": \[\n    \{ "kind": "mute", "pattern": "Weekly Q&A", "topic": "paint" \},\n    \{ "kind": "route", /);
+  const fresh = openDb(':memory:');
+  fresh.seedChannels(() => parseChannelsFile(exported));
+  const rules = (d) => d.listRules().map(({ id, ...r }) => r);
+  assert.equal(rules(fresh).length, 2);
+  assert.deepEqual(rules(fresh), rules(db));
+});
+
+test('a channels file without rules still loads, with no rules', () => {
+  const { rules, ...old } = JSON.parse(EXAMPLE_FILE);
+  assert.equal(rules.length, 2);
+  const db = openDb(':memory:');
+  db.seedChannels(() => parseChannelsFile(JSON.stringify(old)));
+  assert.equal(db.listChannels().length, 4);
+  assert.deepEqual(db.listRules(), []);
+});
+
+test('parseChannelsFile rejects a rule with an unknown channel or topic, and a route rule without both', () => {
+  const file = (rule) => JSON.stringify({ topics: { a: 'A' }, channels: [{ id: A, name: 'Alpha', topics: ['a'] }], rules: [rule] });
+  assert.throws(() => parseChannelsFile(file({ kind: 'mute', pattern: 'x', channel: B })), /unknown channel/);
+  assert.throws(() => parseChannelsFile(file({ kind: 'mute', pattern: 'x', topic: 'nope' })), /unknown topic nope/);
+  assert.throws(() => parseChannelsFile(file({ kind: 'route', pattern: 'x', channel: A })), /needs a channel and a topic/);
+  assert.throws(() => parseChannelsFile(file({ kind: 'hide', pattern: 'x' })), /needs kind/);
+  assert.throws(() => parseChannelsFile(file({ kind: 'mute', pattern: '!!' })), /needs a pattern with a word/);
+});
+
 test('parseChannelsFile rejects a hidden topic that is not in topics', () => {
   const bad = JSON.stringify({ topics: { a: 'A' }, hiddenTopics: ['nope'], channels: [] });
   assert.throws(() => parseChannelsFile(bad), /hiddenTopics lists unknown topic nope/);

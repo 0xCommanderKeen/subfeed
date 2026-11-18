@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DB_PATH, openDb } from './db.mjs';
-import { CHANNEL_ID } from '../public/vocab.js';
+import { CHANNEL_ID, wordsOf } from '../public/vocab.js';
 
 export const CHANNELS_PATH = join(import.meta.dirname, '..', 'channels.json');
 
@@ -30,11 +30,23 @@ export function parseChannelsFile(text) {
     if (unknown) fail(`channel ${c.id} uses unknown topic ${unknown}`);
     return { id: c.id, name: String(c.name ?? c.id), handle: c.handle ?? null, topics: c.topics, subscribed: c.subscribed !== false, favorite: c.favorite === true };
   });
-  return { topics, channels };
+  const ruleList = data.rules ?? [];
+  if (!Array.isArray(ruleList)) fail('rules needs to be an array');
+  const rules = ruleList.map((r) => {
+    if (r?.kind !== 'mute' && r?.kind !== 'route') fail(`rule ${JSON.stringify(r)} needs kind "mute" or "route"`);
+    if (typeof r.pattern !== 'string' || !wordsOf(r.pattern).length) fail(`rule ${JSON.stringify(r)} needs a pattern with a word`);
+    const channelId = r.channel ?? null;
+    const topicId = r.topic ?? null;
+    if (channelId !== null && !seen.has(channelId)) fail(`rule ${JSON.stringify(r)} uses unknown channel ${channelId}`);
+    if (topicId !== null && !topicIds.has(topicId)) fail(`rule ${JSON.stringify(r)} uses unknown topic ${topicId}`);
+    if (r.kind === 'route' && (channelId === null || topicId === null)) fail(`route rule ${JSON.stringify(r)} needs a channel and a topic`);
+    return { kind: r.kind, pattern: r.pattern, channelId, topicId };
+  });
+  return { topics, channels, rules };
 }
 
-// One channel per line, so adding or editing a channel shows up as a one-line diff.
-export function formatChannelsFile({ topics, channels }) {
+// One channel or rule per line, so adding or editing one shows up as a one-line diff.
+function formatChannelsFile({ topics, channels, rules }) {
   const value = (v) => (Array.isArray(v) ? `[${v.map((x) => JSON.stringify(x)).join(', ')}]` : JSON.stringify(v));
   const object = (o) => `{ ${Object.entries(o).map(([k, v]) => `${JSON.stringify(k)}: ${value(v)}`).join(', ')} }`;
   const line = (c) =>
@@ -46,6 +58,7 @@ export function formatChannelsFile({ topics, channels }) {
       ...(!c.subscribed && { subscribed: false }),
       ...(c.favorite && { favorite: true }),
     });
+  const rule = (r) => object({ kind: r.kind, pattern: r.pattern, ...(r.channelId && { channel: r.channelId }), ...(r.topicId && { topic: r.topicId }) });
   const hidden = topics.filter((t) => t.hidden).map((t) => t.id);
   return [
     '{',
@@ -55,13 +68,14 @@ export function formatChannelsFile({ topics, channels }) {
     ...(hidden.length ? [`  "hiddenTopics": ${value(hidden)},`] : []),
     '  "channels": [',
     channels.map((c) => `    ${line(c)}`).join(',\n'),
-    '  ]',
+    rules.length ? '  ],' : '  ]',
+    ...(rules.length ? ['  "rules": [', rules.map((r) => `    ${rule(r)}`).join(',\n'), '  ]'] : []),
     '}',
     '',
   ].join('\n');
 }
 
-export const exportChannels = (db) => formatChannelsFile({ topics: db.listTopics(), channels: db.listChannels() });
+export const exportChannels = (db) => formatChannelsFile({ topics: db.listTopics(), channels: db.listChannels(), rules: db.listRules() });
 
 // channels.json is the user's own list and is not tracked; without it the database starts empty and stays unseeded,
 // so a channels.json added before the first channel still seeds it.

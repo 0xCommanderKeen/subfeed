@@ -2,6 +2,6 @@
   "check": "npm test",
   "maxJobs": 3,
   "merge": "triage",
-  "protect": ["Dockerfile", ".dockerignore", "package.json", "src/http-guard.mjs", "src/schema.mjs", "src/backup.mjs"],
+  "protect": ["Dockerfile", ".dockerignore", "package.json", "src/http-guard.mjs", "src/http-io.mjs", "src/mcp.mjs", "src/schema.mjs", "src/backup.mjs"],
   "mergeLines": 400
 }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -101,6 +101,41 @@ test('a failed backup is logged and reported once per check, leaving no partial 
   assert.deepEqual(failures, ['disk full']);
   assert.deepEqual(readdirSync(dir), []);
   assert.ok(existsSync(dir));
+});
+
+test('a run deletes the partial snapshots that earlier days left behind, and the channels file holds the rules', () => {
+  const dir = tempDir();
+  writeFileSync(join(dir, 'subfeed-2026-11-10.db.partial'), 'half');
+  writeFileSync(join(dir, 'notes.partial'), 'not ours');
+  const db = openDb(':memory:');
+  db.subscribeChannel({ id: A, name: 'Alpha' }, []);
+  db.addRule({ kind: 'mute', pattern: 'live' });
+  db.addRule({ kind: 'mute', pattern: 'trailer', channelId: A });
+  runBackup(db, { now: at('2026-11-15'), dir });
+  assert.deepEqual(readdirSync(dir).sort(), ['channels-2026-11-15.json', 'notes.partial', 'subfeed-2026-11-15.db']);
+  const { rules } = parseChannelsFile(readFileSync(join(dir, 'channels-2026-11-15.json'), 'utf8'));
+  assert.deepEqual(rules, [
+    { kind: 'mute', pattern: 'live', channelId: null, topicId: null },
+    { kind: 'mute', pattern: 'trailer', channelId: A, topicId: null },
+  ]);
+});
+
+// Dropping a cell from a leaf page's count leaves a file that opens and reads, but fails quick_check.
+const writeDamagedDb = (file) => {
+  const d = new DatabaseSync(file);
+  d.exec("CREATE TABLE t (x); WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 200) INSERT INTO t SELECT printf('%0100d', i) FROM n");
+  d.close();
+  const bytes = readFileSync(file);
+  const leaf = 3 * 4096;
+  bytes.writeUInt16BE(bytes.readUInt16BE(leaf + 3) - 1, leaf + 3);
+  writeFileSync(file, bytes);
+};
+
+test('a snapshot that fails quick_check fails the run and leaves neither the snapshot nor its partial', () => {
+  const dir = tempDir();
+  const damaged = { snapshot: writeDamagedDb, listTopics: () => [], listChannels: () => [], listRules: () => [] };
+  assert.throws(() => runBackup(damaged, { now: at('2026-11-15'), dir }), /snapshot failed quick_check: .*Fragmentation/s);
+  assert.deepEqual(readdirSync(dir), []);
 });
 
 test('an optimize run that finds the database locked is logged and the process keeps running', async (t) => {

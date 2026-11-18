@@ -24,7 +24,7 @@ A local YouTube feed server on Node 26 with zero dependencies. SQLite comes from
   - Each module is a factory that takes the connection, `tx` if it writes in a transaction, and `stamp` if it reads the time, and returns its methods. No query module reads the real clock. A method calls another of its module directly, not through `this`.
 - `src/mcp.mjs` is the MCP transport (JSON-RPC over `POST /mcp`). `src/mcp-tools.mjs` defines the tools.
 - `src/request.mjs` holds `parseRequest()`, which checks a route's path, query and body, and the field types it checks them with.
-- `src/http-guard.mjs` holds `refusal()`, the host and content-type check. `src/error-boundary.mjs` wraps the handler.
+- `src/http-guard.mjs` holds `guarded()`, the host, origin and content-type check that `createApp` puts in front of every path, and `DEFAULT_HOST`, the loopback address `main()` binds when `HOST` is unset. `src/http-io.mjs` holds the 1 MiB body cap. `src/error-boundary.mjs` wraps the handler.
 - `public/*.js` is browser code. `public/vocab.js` (id patterns, title words), `public/groups.js` and `public/kinds.js` are also imported by the server, so they must not use the DOM.
 - `test/*.test.mjs` are the tests; `test/fixtures` holds saved YouTube pages and API answers.
 
@@ -32,7 +32,7 @@ A local YouTube feed server on Node 26 with zero dependencies. SQLite comes from
 
 - No dependencies. Do not add anything to `package.json` `dependencies`.
 - The database is the source of truth for channels and topics. `channels.json` only seeds a new database. It is the user's own list and gitignored; `channels.example.json` shows the layout. See [History and the database](docs/database.md#history-and-the-database).
-- Every request passes `refusal()` before any handler runs. Do not add a path around it. See [Request checks](docs/api.md#request-checks).
+- Every request passes `guarded()` before any handler runs. Do not add a path around it. See [Request checks](docs/api.md#request-checks).
 - Validate ids before they reach the database: `VIDEO_ID` and `CHANNEL_ID` from `public/vocab.js`, or a route's declared `params`.
 - HTTP handlers report bad input with `throw new HttpError(status, message)`. The client gets `{ "error": message }`.
 - MCP tools report failures with `throw new Error(message)`. `src/mcp.mjs` returns it as a result with `isError: true` so the model reads it. `RpcError` is only for protocol faults.

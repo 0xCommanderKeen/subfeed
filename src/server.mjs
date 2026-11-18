@@ -12,7 +12,7 @@ import { loadEnv } from './env.mjs';
 import { DB_PATH, LENGTH_FILTER, topicGroup } from './db.mjs';
 import { fetchChannelFeeds, videoUrl } from './feed.mjs';
 import { hotSince, hotStaleBefore, withVelocity } from './hot.mjs';
-import { allowedHosts, refusal } from './http-guard.mjs';
+import { allowedHosts, DEFAULT_HOST, guarded } from './http-guard.mjs';
 import { sendJson } from './http-io.mjs';
 import { EXAMPLES_PER_TOPIC, backfillUnits, claudeSuggester, keywordSuggestions, parseSubscriptionsCsv } from './import-subs.mjs';
 import { INSTRUCTIONS, subfeedTools } from './mcp-tools.mjs';
@@ -695,8 +695,6 @@ export function createApp({
   });
 
   async function handle(req, res) {
-    const refused = refusal(req, hosts);
-    if (refused) return sendJson(res, refused.status, { error: refused.error });
     let url;
     try {
       url = new URL(req.url, 'http://localhost');
@@ -708,14 +706,13 @@ export function createApp({
     await serveStatic(url.pathname, res);
   }
 
-  return { handle: withErrorBoundary(handle), refresh, routes: ROUTES, stopBackfills: backfills.stop };
+  return { handle: withErrorBoundary(guarded(handle, { hosts })), refresh, routes: ROUTES, stopBackfills: backfills.stop };
 }
 
 function main() {
   loadEnv();
   const port = process.env.PORT ? Number(process.env.PORT) : 4173;
-  // Loopback only by default: the API can change favorites and channels. HOST=0.0.0.0 exposes it to the LAN.
-  const host = process.env.HOST || '127.0.0.1';
+  const host = process.env.HOST || DEFAULT_HOST;
   const dbPath = process.env.SUBFEED_DB || DB_PATH;
   const db = openSeededDb(dbPath);
   const searcher = searchWorker(dbPath);

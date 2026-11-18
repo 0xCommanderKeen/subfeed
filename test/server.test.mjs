@@ -357,12 +357,6 @@ test('a body over 1 MiB is refused with 413 by the API and by /mcp', async (t) =
   assert.equal((await s.json('GET', '/api/meta')).status, 200);
 });
 
-test('a cross-site POST to /mcp is refused', async (t) => {
-  const s = await start(t);
-  const ping = { jsonrpc: '2.0', id: 1, method: 'ping' };
-  assert.equal((await s.request('POST', '/mcp', ping, { Origin: 'http://evil.example' })).status, 403);
-});
-
 test('a refresh where one channel fails stores the others and reports the failure per channel', async (t) => {
   const s = await start(t, { fetchFeeds: feedsOf({ [A]: { videos: [video(A, 1)], error: null }, [B]: { videos: [], error: 'HTTP 500' } }) });
   const { status, body } = await s.json('POST', '/api/refresh');

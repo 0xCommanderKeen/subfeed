@@ -1,10 +1,11 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { formatChannelsFile } from './channels-file.mjs';
-import { DB_PATH } from './db.mjs';
+import { exportChannels } from './channels-file.mjs';
+import { DB_PATH, quickCheck } from './db.mjs';
 
 const BACKUP_DIR = join(dirname(DB_PATH), 'backups');
 const SNAPSHOT = /^subfeed-(\d{4}-\d{2}-\d{2})\.db$/;
+const PARTIAL = /^subfeed-\d{4}-\d{2}-\d{2}\.db\.partial$/;
 const KEEP_DAILY = 7;
 const KEEP_WEEKLY = 4;
 
@@ -42,16 +43,23 @@ const listDays = (dir) => readdirSync(dir).map((f) => f.match(SNAPSHOT)?.[1]).fi
 
 export function runBackup(db, { now = new Date(), dir = BACKUP_DIR } = {}) {
   mkdirSync(dir, { recursive: true });
+  // VACUUM INTO refuses an existing file, and a half-written snapshot must never pass for a finished one.
+  for (const f of readdirSync(dir).filter((f) => PARTIAL.test(f))) rmSync(join(dir, f), { force: true });
   const day = backupDay(now);
   const target = join(dir, snapshotName(day));
   let created = false;
   if (!existsSync(target)) {
-    // VACUUM INTO refuses an existing file, and a half-written snapshot must never pass for today's.
     const partial = `${target}.partial`;
-    rmSync(partial, { force: true });
-    db.snapshot(partial);
-    renameSync(partial, target);
-    writeFileSync(join(dir, channelsName(day)), formatChannelsFile({ topics: db.listTopics(), channels: db.listChannels() }));
+    try {
+      db.snapshot(partial);
+      const check = quickCheck(partial);
+      if (check !== 'ok') throw new Error(`snapshot failed quick_check: ${check}`);
+      renameSync(partial, target);
+    } catch (err) {
+      rmSync(partial, { force: true });
+      throw err;
+    }
+    writeFileSync(join(dir, channelsName(day)), exportChannels(db));
     created = true;
   }
   const keep = daysToKeep(listDays(dir));

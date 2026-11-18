@@ -174,13 +174,14 @@ export function library(db, tx, stamp) {
       return tx(() => {
         const empty = !db.prepare('SELECT 1 FROM channels LIMIT 1').get();
         if (empty) {
-          const { topics, channels } = load();
+          const { topics, channels, rules = [] } = load();
           const now = stamp();
           topics.forEach((t, i) => insertTopic.run(t.id, t.name, i, t.hidden ? 1 : 0));
           for (const c of channels) {
             insertChannel.run({ id: c.id, name: c.name, handle: c.handle ?? null, avatar: null, subscribed: c.subscribed === false ? 0 : 1, favorite: c.favorite ? 1 : 0, now });
             linkTopics(c.id, c.topics);
           }
+          for (const r of rules) insertRule.run({ kind: r.kind, pattern: r.pattern, words: spacedWords(r.pattern), channelId: r.channelId, topicId: r.topicId });
         }
         db.exec('UPDATE meta SET seeded = 1');
         return empty;

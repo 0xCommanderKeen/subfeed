@@ -26,7 +26,7 @@ The database is the source of truth for channels and topics. When a new database
 node bin/export-channels.mjs
 ```
 
-The export uses the same one-channel-per-line layout. It writes `"subscribed": false` and `"favorite": true` only for channels that have them, and a `"hiddenTopics"` list of topic ids only when a topic is hidden. A new database seeded from an exported file has the same channels, topics, and flags.
+The export uses the same one-channel-per-line layout. It writes `"subscribed": false` and `"favorite": true` only for channels that have them, and a `"hiddenTopics"` list of topic ids only when a topic is hidden. When there are [rules](features.md#rules), it writes them in a `"rules"` list, one per line, each with its `kind` (`mute` or `route`), its `pattern`, and the `channel` and `topic` it is limited to, if any. A file without `"rules"` seeds no rules. A new database seeded from an exported file has the same channels, topics, flags, and rules.
 
 ## Refreshes
 
@@ -40,7 +40,7 @@ On SIGTERM or SIGINT (Ctrl-C) the server stops taking connections, stops the run
 
 The server writes a snapshot of the database to `data/backups/subfeed-YYYY-MM-DD.db` once a day, with the channel list next to it as `channels-YYYY-MM-DD.json` in the `bin/export-channels.mjs` layout. Dates are UTC days. The server checks one minute after it starts and then every hour, and writes the snapshot when today's file is missing. So the snapshot appears within an hour after midnight UTC, and a server that was down at that time catches up when it starts.
 
-The snapshot uses SQLite `VACUUM INTO`, so it includes writes that are still in the write-ahead log. A plain copy of `subfeed.db` can miss them.
+The snapshot uses SQLite `VACUUM INTO`, so it includes writes that are still in the write-ahead log. A plain copy of `subfeed.db` can miss them. The server writes it to `subfeed-YYYY-MM-DD.db.partial` and renames it only after `PRAGMA quick_check` reports `ok`; otherwise it deletes the file and the backup fails. Each check first deletes any `.partial` file an earlier run left behind.
 
 The server keeps the 7 newest snapshots and, from the older ones, the newest snapshot of each of the 4 most recent ISO weeks. It deletes the others with their channel lists. Retention counts snapshots, not days, so days without a backup never delete the last good ones. Each new snapshot is logged. A failed backup is logged and, when ntfy is set up, sends a high-priority alert titled "subfeed backup failed". See [Notifications](features.md#notifications).
 
