@@ -1,0 +1,12 @@
+{
+  "topics": {
+    "science": "Science",
+    "engineering": "Engineering"
+  },
+  "channels": [
+    { "id": "UCHnyfMqiRRG1u-2MsSQLbXA", "name": "Veritasium", "topics": ["science"] },
+    { "id": "UCsXVk37bltHxD1rDPwtNM8Q", "name": "Kurzgesagt – In a Nutshell", "topics": ["science"] },
+    { "id": "UCY1kMZp36IQSyNx_9h4mpCg", "name": "Mark Rober", "topics": ["engineering", "science"] },
+    { "id": "UC6107grRI4m0o2-emgoDnAA", "name": "SmarterEveryDay", "topics": ["engineering", "science"] }
+  ]
+}

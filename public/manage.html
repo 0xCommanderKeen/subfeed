@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manage channels · subfeed</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0c0b0a">
+  <link rel="stylesheet" href="style.css">
+  <script>document.documentElement.classList.toggle('nav-compact', localStorage.getItem('subfeed.navCompact') === 'true');</script>
+</head>
+<body class="manage">
+  <aside class="nav" id="nav"></aside>
+  <div class="nav-backdrop" id="nav-backdrop"></div>
+  <header class="top">
+    <button class="icon-btn" id="nav-open" type="button" aria-label="Open groups" aria-controls="nav" aria-expanded="false"></button>
+    <a class="brand" href="./">Sub<span>/</span>feed</a>
+  </header>
+  <div class="page">
+    <main>
+      <section class="hero"><h1>Channels</h1><p class="lede" id="summary"></p></section>
+      <div class="notice" id="notice" role="status"></div>
+      <section class="panel" aria-labelledby="add-title">
+        <h2 id="add-title">Add a channel</h2>
+        <form id="add-form" class="add-row">
+          <input type="text" id="add-input" placeholder="@handle or channel URL" aria-label="Channel handle or URL" autocomplete="off" spellcheck="false">
+          <button class="btn primary" id="add-button" type="submit">Add channel</button>
+        </form>
+        <div class="pick"><span class="muted">Topics</span><span class="pills" id="add-topics"></span></div>
+        <div id="add-result" aria-live="polite"></div>
+      </section>
+      <section class="panel" aria-labelledby="import-title">
+        <h2 id="import-title">Import subscriptions</h2>
+        <p class="muted">Upload <code>subscriptions.csv</code> from Google Takeout: YouTube and YouTube Music, then subscriptions. You review the channels that are not in subfeed yet before anything is added.</p>
+        <div class="pick"><label class="btn file-btn"><input type="file" id="import-file" accept=".csv,text/csv">Choose subscriptions.csv</label><span class="muted" id="import-file-name"></span></div>
+        <div id="import-review" aria-live="polite"></div>
+      </section>
+      <div class="layout">
+        <section class="panel" aria-labelledby="channels-title">
+          <div class="channels-head">
+            <h2 id="channels-title">Subscriptions</h2>
+            <input type="search" id="filter" placeholder="Filter by name or handle" aria-label="Filter channels">
+          </div>
+          <div class="channel-tools" id="channel-tools"></div>
+          <div class="bulk" id="bulk"></div>
+          <div id="channel-groups"><p class="muted">Loading…</p></div>
+        </section>
+        <aside class="side">
+          <section class="panel" aria-labelledby="topics-title">
+            <h2 id="topics-title">Topics</h2>
+            <ul id="topic-list"></ul>
+            <form id="topic-form" class="topic-form">
+              <input type="text" id="topic-input" placeholder="New topic name" aria-label="New topic name" maxlength="60">
+              <button class="btn" type="submit">Add topic</button>
+            </form>
+          </section>
+          <section class="panel" aria-labelledby="rules-title">
+            <h2 id="rules-title">Rules</h2>
+            <p class="muted">Mute hides videos whose title holds the words, everywhere or in one group or channel. Route lets a channel into a group only for titles that hold them. Show muted in the sidebar reveals what the rules hide.</p>
+            <ul id="rule-list"></ul>
+            <form id="rule-form" class="topic-form rule-form"></form>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <script type="module" src="manage.js"></script>
+</body>
+</html>

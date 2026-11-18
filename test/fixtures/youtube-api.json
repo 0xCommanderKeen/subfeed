@@ -1,0 +1,245 @@
+{
+  "playlistItems UULFaaaaaaaaaaaaaaaaaaaaaa ": {
+    "status": 200,
+    "body": {
+      "kind": "youtube#playlistItemListResponse",
+      "etag": "e1",
+      "nextPageToken": "EAAaBlBUOkNESQ",
+      "pageInfo": { "totalResults": 3, "resultsPerPage": 50 },
+      "items": [
+        {
+          "kind": "youtube#playlistItem",
+          "etag": "i1",
+          "id": "VVVMRmFhYWFhYWFhYWFhYWFhYWFhYWFhLmxvbmdWaWRlbzAx",
+          "snippet": {
+            "publishedAt": "2025-03-02T15:00:07Z",
+            "channelId": "UCaaaaaaaaaaaaaaaaaaaaaa",
+            "title": "Long video one & friends",
+            "description": "First upload.",
+            "thumbnails": {
+              "default": { "url": "https://i.ytimg.com/vi/longVideo01/default.jpg", "width": 120, "height": 90 },
+              "medium": { "url": "https://i.ytimg.com/vi/longVideo01/mqdefault.jpg", "width": 320, "height": 180 },
+              "high": { "url": "https://i.ytimg.com/vi/longVideo01/hqdefault.jpg", "width": 480, "height": 360 },
+              "standard": { "url": "https://i.ytimg.com/vi/longVideo01/sddefault.jpg", "width": 640, "height": 480 },
+              "maxres": { "url": "https://i.ytimg.com/vi/longVideo01/maxresdefault.jpg", "width": 1280, "height": 720 }
+            },
+            "channelTitle": "Channel A",
+            "playlistId": "UULFaaaaaaaaaaaaaaaaaaaaaa",
+            "position": 0,
+            "resourceId": { "kind": "youtube#video", "videoId": "longVideo01" },
+            "videoOwnerChannelTitle": "Channel A",
+            "videoOwnerChannelId": "UCaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "contentDetails": { "videoId": "longVideo01", "videoPublishedAt": "2025-03-02T15:00:00Z" }
+        },
+        {
+          "kind": "youtube#playlistItem",
+          "etag": "i2",
+          "id": "VVVMRmFhYWFhYWFhYWFhYWFhYWFhYWFhLmRlbGV0ZWQwMDAx",
+          "snippet": {
+            "publishedAt": "2025-02-01T10:00:00Z",
+            "channelId": "UCaaaaaaaaaaaaaaaaaaaaaa",
+            "title": "Deleted video",
+            "description": "This video is unavailable.",
+            "thumbnails": {},
+            "channelTitle": "Channel A",
+            "playlistId": "UULFaaaaaaaaaaaaaaaaaaaaaa",
+            "position": 1,
+            "resourceId": { "kind": "youtube#video", "videoId": "deleted0001" }
+          },
+          "contentDetails": { "videoId": "deleted0001" }
+        },
+        {
+          "kind": "youtube#playlistItem",
+          "etag": "i3",
+          "id": "VVVMRmFhYWFhYWFhYWFhYWFhYWFhYWFhLmxvbmdWaWRlbzAy",
+          "snippet": {
+            "publishedAt": "2025-01-15T09:30:00Z",
+            "channelId": "UCaaaaaaaaaaaaaaaaaaaaaa",
+            "title": "Long video two",
+            "description": "",
+            "thumbnails": {
+              "default": { "url": "https://i.ytimg.com/vi/longVideo02/default.jpg", "width": 120, "height": 90 },
+              "medium": { "url": "https://i.ytimg.com/vi/longVideo02/mqdefault.jpg", "width": 320, "height": 180 }
+            },
+            "channelTitle": "Channel A",
+            "playlistId": "UULFaaaaaaaaaaaaaaaaaaaaaa",
+            "position": 2,
+            "resourceId": { "kind": "youtube#video", "videoId": "longVideo02" },
+            "videoOwnerChannelTitle": "Channel A",
+            "videoOwnerChannelId": "UCaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "contentDetails": { "videoId": "longVideo02", "videoPublishedAt": "2025-01-15T09:30:00Z" }
+        }
+      ]
+    }
+  },
+  "playlistItems UULFaaaaaaaaaaaaaaaaaaaaaa EAAaBlBUOkNESQ": {
+    "status": 200,
+    "body": {
+      "kind": "youtube#playlistItemListResponse",
+      "etag": "e2",
+      "prevPageToken": "EAEaBlBUOkNESQ",
+      "pageInfo": { "totalResults": 3, "resultsPerPage": 50 },
+      "items": [
+        {
+          "kind": "youtube#playlistItem",
+          "etag": "i4",
+          "id": "VVVMRmFhYWFhYWFhYWFhYWFhYWFhYWFhLmxvbmdWaWRlbzAz",
+          "snippet": {
+            "publishedAt": "2024-12-24T18:00:00Z",
+            "channelId": "UCaaaaaaaaaaaaaaaaaaaaaa",
+            "title": "Long video three",
+            "description": "",
+            "thumbnails": {
+              "high": { "url": "https://i.ytimg.com/vi/longVideo03/hqdefault.jpg", "width": 480, "height": 360 }
+            },
+            "channelTitle": "Channel A",
+            "playlistId": "UULFaaaaaaaaaaaaaaaaaaaaaa",
+            "position": 3,
+            "resourceId": { "kind": "youtube#video", "videoId": "longVideo03" },
+            "videoOwnerChannelTitle": "Channel A",
+            "videoOwnerChannelId": "UCaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "contentDetails": { "videoId": "longVideo03", "videoPublishedAt": "2024-12-24T18:00:00Z" }
+        }
+      ]
+    }
+  },
+  "playlistItems UUSHaaaaaaaaaaaaaaaaaaaaaa ": {
+    "status": 404,
+    "body": {
+      "error": {
+        "code": 404,
+        "message": "The playlist identified with the request's <code>playlistId</code> parameter cannot be found.",
+        "errors": [
+          {
+            "message": "The playlist identified with the request's <code>playlistId</code> parameter cannot be found.",
+            "domain": "youtube.playlistItem",
+            "reason": "playlistNotFound",
+            "location": "playlistId",
+            "locationType": "parameter"
+          }
+        ]
+      }
+    }
+  },
+  "videos longVideo01,longVideo02 ": {
+    "status": 200,
+    "body": {
+      "kind": "youtube#videoListResponse",
+      "etag": "v1",
+      "pageInfo": { "totalResults": 2, "resultsPerPage": 2 },
+      "items": [
+        {
+          "kind": "youtube#video",
+          "etag": "v1a",
+          "id": "longVideo01",
+          "contentDetails": { "duration": "PT1H2M3S", "dimension": "2d", "definition": "hd", "caption": "false", "licensedContent": true, "contentRating": {}, "projection": "rectangular" },
+          "statistics": { "viewCount": "123456", "likeCount": "4000", "favoriteCount": "0", "commentCount": "321" }
+        },
+        {
+          "kind": "youtube#video",
+          "etag": "v1b",
+          "id": "longVideo02",
+          "contentDetails": { "duration": "PT14M", "dimension": "2d", "definition": "hd", "caption": "true", "licensedContent": false, "contentRating": {}, "projection": "rectangular" },
+          "statistics": { "likeCount": "12", "favoriteCount": "0", "commentCount": "3" }
+        }
+      ]
+    }
+  },
+  "videos longVideo03 ": {
+    "status": 200,
+    "body": {
+      "kind": "youtube#videoListResponse",
+      "etag": "v2",
+      "pageInfo": { "totalResults": 1, "resultsPerPage": 1 },
+      "items": [
+        {
+          "kind": "youtube#video",
+          "etag": "v2a",
+          "id": "longVideo03",
+          "contentDetails": { "duration": "P1DT2S", "dimension": "2d", "definition": "hd", "caption": "false", "licensedContent": true, "contentRating": {}, "projection": "rectangular" },
+          "statistics": { "viewCount": "7", "likeCount": "1", "favoriteCount": "0", "commentCount": "0" }
+        }
+      ]
+    }
+  },
+  "playlistItems UULVaaaaaaaaaaaaaaaaaaaaaa ": {
+    "status": 404,
+    "body": { "error": { "code": 404, "message": "The playlist identified with the request's <code>playlistId</code> parameter cannot be found.", "errors": [{ "reason": "playlistNotFound" }] } }
+  },
+  "playlistItems UULFbbbbbbbbbbbbbbbbbbbbbb ": {
+    "status": 200,
+    "body": { "kind": "youtube#playlistItemListResponse", "etag": "e3", "pageInfo": { "totalResults": 0, "resultsPerPage": 50 }, "items": [] }
+  },
+  "playlistItems UUSHbbbbbbbbbbbbbbbbbbbbbb ": {
+    "status": 200,
+    "body": {
+      "kind": "youtube#playlistItemListResponse",
+      "etag": "e4",
+      "pageInfo": { "totalResults": 1, "resultsPerPage": 50 },
+      "items": [
+        {
+          "kind": "youtube#playlistItem",
+          "etag": "i5",
+          "id": "VVVTSGJiYmJiYmJiYmJiYmJiYmJiYmJiLnNob3J0VmlkMDAx",
+          "snippet": {
+            "publishedAt": "2025-04-01T12:00:00Z",
+            "channelId": "UCbbbbbbbbbbbbbbbbbbbbbb",
+            "title": "A short",
+            "description": "",
+            "thumbnails": {
+              "default": { "url": "https://i.ytimg.com/vi/shortVid001/default.jpg", "width": 120, "height": 90 },
+              "high": { "url": "https://i.ytimg.com/vi/shortVid001/hqdefault.jpg", "width": 480, "height": 360 }
+            },
+            "channelTitle": "Channel B",
+            "playlistId": "UUSHbbbbbbbbbbbbbbbbbbbbbb",
+            "position": 0,
+            "resourceId": { "kind": "youtube#video", "videoId": "shortVid001" },
+            "videoOwnerChannelTitle": "Channel B",
+            "videoOwnerChannelId": "UCbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "contentDetails": { "videoId": "shortVid001", "videoPublishedAt": "2025-04-01T12:00:00Z" }
+        }
+      ]
+    }
+  },
+  "videos shortVid001 ": {
+    "status": 200,
+    "body": {
+      "kind": "youtube#videoListResponse",
+      "etag": "v3",
+      "pageInfo": { "totalResults": 1, "resultsPerPage": 1 },
+      "items": [
+        {
+          "kind": "youtube#video",
+          "etag": "v3a",
+          "id": "shortVid001",
+          "contentDetails": { "duration": "PT45S", "dimension": "2d", "definition": "hd", "caption": "false", "licensedContent": false, "contentRating": {}, "projection": "rectangular" },
+          "statistics": { "viewCount": "999", "likeCount": "9", "favoriteCount": "0", "commentCount": "0" }
+        }
+      ]
+    }
+  },
+  "playlistItems UULVbbbbbbbbbbbbbbbbbbbbbb ": {
+    "status": 404,
+    "body": { "error": { "code": 404, "message": "The playlist identified with the request's <code>playlistId</code> parameter cannot be found.", "errors": [{ "reason": "playlistNotFound" }] } }
+  },
+  "playlistItems UULFcccccccccccccccccccccc ": {
+    "status": 403,
+    "body": {
+      "error": {
+        "code": 403,
+        "message": "The request cannot be completed because you have exceeded your <a href=\"/youtube/v3/getting-started#quota\">quota</a>.",
+        "errors": [
+          {
+            "message": "The request cannot be completed because you have exceeded your <a href=\"/youtube/v3/getting-started#quota\">quota</a>.",
+            "domain": "youtube.quota",
+            "reason": "quotaExceeded"
+          }
+        ]
+      }
+    }
+  }
+}

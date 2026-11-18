@@ -1,0 +1,15 @@
+{
+  "name": "subfeed",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Local feed of recent videos from a curated YouTube channel list, filtered by topic",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=26"
+  }
+}
