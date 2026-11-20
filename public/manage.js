@@ -1,5 +1,5 @@
-import { DEFAULT_INACTIVE_DAYS, INACTIVE_PERIODS, lastUploadText, shownChannels, tickedChannels } from './activity.js';
-import { api, channelHead, channelLink, el, failed, fill, icon, prefs, registerServiceWorker, starButton, toast, topicPicker } from './dom.js';
+import { DEFAULT_INACTIVE_DAYS, INACTIVE_PERIODS, backfilling, lastUploadText, shownChannels, stopBackfillQuestion, tickedChannels } from './activity.js';
+import { api, channelHead, channelLink, el, failed, fill, finePointer, icon, prefs, registerServiceWorker, starButton, toast, topicPicker } from './dom.js';
 import { buildGroups, visibleCount } from './groups.js';
 import { mountImport } from './import.js';
 import { mountNav } from './sidebar.js';
@@ -7,7 +7,6 @@ import { sortable } from './sortable.js';
 import { plural, whole } from './vocab.js';
 
 const POLL_MS = 1500;
-const FINE_POINTER = matchMedia('(pointer: fine)');
 const NO_TOPIC = '';
 const CLOSED = { kind: 'none' };
 const resumeTime = new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
@@ -130,13 +129,11 @@ function mutate(request, apply = null) {
 
 const patchChannel = (c, change) => mutate(() => api('PATCH', `/api/channels/${c.id}`, change), () => Object.assign(c, change));
 
-const backfilling = (c) => c.backfill === 'running' || c.backfill === 'queued';
-
 // Unsubscribing is undone by resubscribing, so it asks first only when it would stop a backfill, which resubscribing
 // does not start again. Returns whether it went ahead.
 function unsubscribe(channels, text) {
   const stopping = channels.filter(backfilling);
-  if (stopping.length && !confirm(`Unsubscribing stops the backfill of ${stopping.map((c) => c.name).join(', ')}, and Undo does not start it again. Unsubscribe anyway?`)) return false;
+  if (stopping.length && !confirm(stopBackfillQuestion(stopping))) return false;
   for (const c of channels) state.selected.delete(c.id);
   const send = (list, subscribed) => mutate(async () => {
     for (const [i, c] of list.entries()) {
@@ -332,7 +329,7 @@ function renderTopics() {
           }),
           button('Rename', () => setUi({ kind: 'rename-topic', topicId: t.id, draft: t.name }), { key: `rename-open-${t.id}`, ariaLabel: `Rename ${t.name}` }),
           button('Delete', () => setUi({ kind: 'delete-topic', topicId: t.id }), { key: `delete-topic-${t.id}`, ariaLabel: `Delete ${t.name}` })));
-      if (FINE_POINTER.matches) row.draggable = true;
+      if (finePointer()) row.draggable = true;
       topicList.attach(row);
       return row;
     }),
@@ -471,7 +468,7 @@ function groupSection(title, channels, group, extraClass = '') {
 
 function renderTools() {
   const period = el('select', { ariaLabel: 'Inactive period', hidden: state.view !== 'inactive', dataset: { key: 'inactive-period' } },
-    ...INACTIVE_PERIODS.map(({ days, label }) => el('option', { value: String(days), textContent: `No upload in ${label}`, })));
+    ...INACTIVE_PERIODS.map(({ days, label }) => el('option', { value: String(days), textContent: `No upload in ${label}` })));
   period.value = String(state.inactiveDays);
   period.addEventListener('change', () => {
     state.inactiveDays = Number(period.value);
@@ -503,9 +500,8 @@ function renderBulk() {
       for (const c of list) state.selected.add(c.id);
       state.bulkResult = '';
       render();
-    }, { key: 'bulk-select-shown', title: 'Tick every channel the list shows' }),
+    }, { key: 'bulk-select-shown', title: 'Tick every channel the list shows', disabled: list.every((c) => state.selected.has(c.id)) }),
   ];
-  parts[0].disabled = list.every((c) => state.selected.has(c.id));
   if (n) {
     parts.push(el('span', { className: 'muted', textContent: `${plural(n, 'channel')} selected` }));
     parts.push(button('Clear', () => {
@@ -531,7 +527,7 @@ function renderBulk() {
     if (targets.length) parts.push(button(`Unsubscribe ${plural(targets.length, 'channel')}`, () => unsubscribe(targets, `Unsubscribed from ${plural(targets.length, 'channel')}.`), { key: 'unsubscribe-selected' }));
   }
   if (state.bulkResult) parts.push(el('span', { className: 'muted', textContent: state.bulkResult }));
-  els.bulk.replaceChildren(...parts);
+  fill(els.bulk, ...parts);
 }
 
 function renderChannels() {
@@ -551,7 +547,7 @@ function renderChannels() {
 }
 
 function renderInactive() {
-  const channels = shownChannels(state.data.channels, listOptions());
+  const channels = shown();
   const label = INACTIVE_PERIODS.find((p) => p.days === state.inactiveDays)?.label ?? plural(state.inactiveDays, 'day');
   fill(els.channels, channels.length
     ? groupSection(`No upload in ${label}`, channels, 'inactive')

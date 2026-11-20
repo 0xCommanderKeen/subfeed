@@ -7,7 +7,7 @@ const HOT_WINDOW_MS = 14 * DAY;
 export const STATS_MAX_AGE_MS = 6 * HOUR;
 // Hot and the flames hide once a count in the window is older than this, when the stats refresh keeps failing
 // (quota used up, revoked key, network) or has not run yet.
-export const STATS_STALE_MS = 2 * STATS_MAX_AGE_MS;
+const STATS_STALE_MS = 2 * STATS_MAX_AGE_MS;
 export const RATE_SQL = 'v.views / max((julianday(:now) - julianday(v.published)) * 24, 1.0)';
 // A flame needs at least this many other videos of the same channel and format in the window to compare with,
 // and a rate this many times their average.
@@ -18,7 +18,7 @@ export const hotSince = (now) => isoBefore(now, HOT_WINDOW_MS);
 
 export const hotStaleBefore = (now) => isoBefore(now, STATS_STALE_MS);
 
-export const viewsPerHour = (views, published, now) => views / Math.max((Date.parse(now) - Date.parse(published)) / HOUR, 1);
+const viewsPerHour = (views, published, now) => views / Math.max((Date.parse(now) - Date.parse(published)) / HOUR, 1);
 
 // `usual` is { n, total } over the rates of the channel's videos in the window of the same format (long or Short),
 // this video included. Returns the video with `viewsPerHour`, null outside the window, and `flame`.

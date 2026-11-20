@@ -1,5 +1,6 @@
-import { api, avatar, el, failed, fill, icon, prefs, registerServiceWorker, segmented, starButton, toast, youtubeChannelUrl } from './dom.js';
+import { api, avatar, el, failed, fill, finePointer, icon, prefs, registerServiceWorker, segmented, starButton, toast, youtubeChannelUrl } from './dom.js';
 import { DAY, bucketOf, buildGroups, defaultBaseline, dropsChannel, groupsMarkedSeen, latestVisible as latestOf, ruleHides, ruledTallies, setMark, shownTallies, tallySets, visibleCount as countOf } from './groups.js';
+import { backfilling, stopBackfillQuestion } from './activity.js';
 import { filterParams } from './filters.js';
 import { pager, unknownChannelIds } from './pager.js';
 import { hashOf, routeOf } from './route.js';
@@ -26,6 +27,12 @@ const SORTS = {
   newest: { label: 'Newest', title: 'Newest first' },
   hot: { label: 'Hot', title: 'Most views per hour since publish, last 14 days' },
 };
+// How the Watch Later page lists the queue. Only the user's own order can be changed by moving rows.
+const QUEUE_ORDERS = {
+  queue: { label: 'Queue', title: 'Your order: move rows to change it', lede: 'in your order' },
+  newest: { label: 'Newest added', title: 'Last added first', lede: 'last added first' },
+  oldest: { label: 'Oldest added', title: 'First added first', lede: 'first added first' },
+};
 const HOT_SECTION = { key: 'hot', label: 'Hot · last 14 days' };
 
 const state = {
@@ -36,6 +43,7 @@ const state = {
   views: prefs.get('views', {}), // groupId -> view id
   length: Object.hasOwn(LENGTHS, prefs.get('length')) ? prefs.get('length') : 'any',
   sort: Object.hasOwn(SORTS, prefs.get('sort')) ? prefs.get('sort') : 'newest',
+  queueOrder: Object.hasOwn(QUEUE_ORDERS, prefs.get('queueOrder')) ? prefs.get('queueOrder') : 'queue',
   // Bumped on every render, so responses for an earlier screen are dropped.
   generation: 0,
 };
@@ -53,7 +61,7 @@ const age = (iso) => `${formatAge(iso)} ago`;
 function period(iso) {
   const d = new Date(iso);
   const today = new Date().setHours(0, 0, 0, 0);
-  const days = Math.round((today - new Date(d).setHours(0, 0, 0, 0)) / DAY);
+  const days = Math.round((today - d.setHours(0, 0, 0, 0)) / DAY);
   if (days <= 0) return { key: 'today', label: 'Today' };
   if (days === 1) return { key: 'yesterday', label: 'Yesterday' };
   if (days < 7) return { key: 'week', label: 'This week' };
@@ -226,9 +234,14 @@ addEventListener('keydown', (e) => {
   else if (action === 'star') press('.star');
 });
 
+// Only a channel that failed two fetches in a row: a single failure is usually a slow YouTube, and the next refresh retries it.
 function renderNotice() {
-  const broken = state.meta.channels.filter((c) => c.ok === false);
-  $('notice').textContent = broken.length ? `Could not load ${plural(broken.length, 'channel')}: ${broken.map((c) => `${c.name} (${c.error})`).join(', ')}` : '';
+  const broken = state.meta.channels.filter((c) => c.failedRuns >= 2);
+  const names = broken.slice(0, 3).map((c) => c.name).join(', ') + (broken.length > 3 ? ` and ${plural(broken.length - 3, 'other')}` : '');
+  fill($('notice'), ...(broken.length ? [
+    `${names} ${broken.length === 1 ? 'has' : 'have'} not updated for a while. `,
+    el('a', { href: 'manage.html', textContent: 'See Manage' }),
+  ] : []));
 }
 
 const renderNav = () => nav.render({ groups: state.groups, meta: state.meta, current: state.route.group.id });
@@ -293,8 +306,7 @@ async function toggleChannelFavorite(id) {
 // Undo that brings the channel page back while the group is still open. Unsubscribing stops the channel's backfill,
 // which Undo does not start again, so then it asks first. Returns whether the change went through.
 async function setSubscribed(channel, subscribed) {
-  if (!subscribed && ['running', 'queued'].includes(channel.backfill)
-    && !confirm(`Unsubscribing stops the backfill of ${channel.name}, and Undo does not start it again. Unsubscribe anyway?`)) return false;
+  if (!subscribed && backfilling(channel) && !confirm(stopBackfillQuestion([channel]))) return false;
   try {
     await api('PATCH', `/api/channels/${channel.id}`, { subscribed });
     setMeta(await api('GET', '/api/meta'));
@@ -387,7 +399,7 @@ function showPosition(v, seconds) {
 
 // The player often saves as the page goes away, so the request has to outlive the page.
 async function savePosition(v, seconds) {
-  const before = v.position ?? null;
+  const before = v.position;
   showPosition(v, seconds);
   try {
     if (seconds === null) await api('DELETE', `/api/position/${v.id}`, null, { keepalive: true });
@@ -400,8 +412,8 @@ async function savePosition(v, seconds) {
 }
 
 // An upcoming premiere has no mark watched toggle. Every card repeats these buttons, so their names carry the title.
-const seenButton = (v, props = {}) => (!kindOf(v.kind).watchable ? null
-  : el('button', { type: 'button', ariaPressed: String(v.watched), title: watchedLabel(v.watched), ariaLabel: `Watched: ${v.title}`, onclick: () => setWatched(v, !v.watched), ...props, className: `seen ${props.className ?? ''}` }, icon('check')));
+const seenButton = (v, className) => (!kindOf(v.kind).watchable ? null
+  : el('button', { type: 'button', className: `seen ${className}`, ariaPressed: String(v.watched), title: watchedLabel(v.watched), ariaLabel: `Watched: ${v.title}`, onclick: () => setWatched(v, !v.watched) }, icon('check')));
 
 const searchWords = (q) => wordsOf(fold(q));
 
@@ -447,7 +459,7 @@ function card(v, { since, withChannel = false, words = [] }) {
   const star = starButton({ className: 'card-action star', pressed: v.favorite, title: favoriteLabel(v.favorite), ariaLabel: `Favorite: ${v.title}`, onToggle: () => toggleVideoFavorite(v) });
   const later = el('button', { type: 'button', className: 'card-action later', ariaPressed: String(v.queued), title: laterLabel(v.queued), ariaLabel: `Watch Later: ${v.title}`, onclick: () => toggleQueued(v) }, icon('clock'));
   const body = withChannel ? el('div', { className: 'card-body' }, avatar(v.channelName, 'avatar md', state.channelsById.get(v.channelId).avatar), text) : text;
-  return el('article', { className: `card${fresh ? ' new' : ''}${v.watched ? ' watched' : ''}${v.muted ? ' muted' : ''}`, dataset: { id: v.id } }, thumb, body, seenButton(v, { className: 'card-action' }), later, star);
+  return el('article', { className: `card${fresh ? ' new' : ''}${v.watched ? ' watched' : ''}${v.muted ? ' muted' : ''}`, dataset: { id: v.id } }, thumb, body, seenButton(v, 'card-action'), later, star);
 }
 
 function chipRow(group, selectedId = null) {
@@ -513,8 +525,8 @@ const lengthSwitch = () => segmented({
 const knownTotal = (n) => (state.length === 'any' ? n : null);
 
 function lede(group, since) {
-  const channels = groupChannels(group);
   if (!group.tracksNew) return el('p', { className: 'lede', textContent: 'Everything you starred.' });
+  const channels = groupChannels(group);
   const fresh = channels.filter((c) => hasNewSince(c, since)).length;
   if (!fresh) return el('p', { className: 'lede', textContent: `Nothing new since ${when.format(new Date(since))}. ${plural(channels.length, 'channel')}.` });
   return el('p', { className: 'lede' },
@@ -531,7 +543,7 @@ const emptyBlock = (title, ...text) => el('div', { className: 'empty' }, el('b',
 
 // A starred group is empty because nothing is starred yet; any other group because of the filters.
 function emptyState(group) {
-  const nothingStarred = group.empty && !(group.channels && groupChannels(group).length);
+  const nothingStarred = group.empty && !groupChannels(group).length;
   return emptyBlock(...(nothingStarred ? group.empty : ['Nothing here', 'No videos match these filters.']));
 }
 
@@ -569,7 +581,7 @@ function pages({ path, params, generation, sentinel, append, total, onEmpty, onT
       if (page.total !== undefined) {
         total = page.total;
         capped = page.totalCapped === true;
-        onTotal?.(total, capped);
+        onTotal(total, capped);
       }
       append(page.videos);
       loaded += page.videos.length;
@@ -698,7 +710,7 @@ function renderChannel(group, channelId, generation) {
     filters.hideStreams && counts.stream ? `${plural(counts.stream, 'stream')} hidden` : null, watchedHidden ? `${whole.format(watchedHidden)} watched hidden` : null];
   const body = el('div', {});
   const sentinel = el('div', { className: 'more' });
-  fill(main, 
+  fill(main,
     el('div', { className: 'crumbs' }, el('button', { type: 'button', className: 'back', onclick: () => openGroup(group) }, icon('back'), group.title)),
     el('section', { className: 'channel-hero' }, avatar(channel.name, 'avatar lg', channel.avatar),
       el('div', {},
@@ -759,19 +771,31 @@ const playerDone = (v) => v.queued && (queueView ? queueView.take(v, 'Watched') 
 
 // A move names the row it lands in front of, so it stays right while Shorts are hidden.
 function renderQueue(group, generation) {
+  const order = state.queueOrder;
+  const movable = order === 'queue';
   const lede = el('p', { className: 'lede', textContent: 'Loading…' });
   const list = el('ol', { className: 'queue' });
   const body = el('div', {});
-  fill(main, el('section', { className: 'hero' }, el('h1', { textContent: group.title }), lede), body);
+  const orderSwitch = segmented({
+    label: 'Order', current: order,
+    options: Object.entries(QUEUE_ORDERS).map(([id, o]) => ({ id, ...o })),
+    onPick: (id) => {
+      state.queueOrder = id;
+      prefs.set('queueOrder', id);
+      render();
+    },
+  });
+  fill(main, el('section', { className: 'hero' }, el('h1', { textContent: group.title }), lede, el('div', { className: 'hero-tools' }, orderSwitch)), body);
 
   const rows = () => [...list.children];
   const idAfter = (row) => row?.nextElementSibling?.dataset.id ?? null;
   const syncLede = () => {
     const n = list.children.length;
-    lede.textContent = n ? `${plural(n, 'video')}, first added first. Play one to work through the queue; each video comes off once it ends or opens on YouTube.` : '';
+    lede.textContent = n ? `${plural(n, 'video')}, ${QUEUE_ORDERS[order].lede}. Play one to work through the queue; each video comes off once it ends or opens on YouTube.` : '';
     if (!n) fill(body, emptyState(group));
     rows().forEach((row, i) => {
       row.querySelector('.pos').textContent = whole.format(i + 1);
+      if (!movable) return;
       row.querySelector('.up').disabled = i === 0;
       row.querySelector('.down').disabled = i === n - 1;
     });
@@ -848,17 +872,18 @@ function renderQueue(group, generation) {
         lengthBadge(v)),
       videoText(v, link({ className: 'title', title: v.title, textContent: v.title })),
       el('div', { className: 'queue-actions' },
-        el('button', { type: 'button', className: 'icon-btn up', title: 'Move up', ariaLabel: `Move ${v.title} up`, onclick: () => (row.previousElementSibling.before(row), saveMove(row, idAfter(row))) }, icon('up')),
-        el('button', { type: 'button', className: 'icon-btn down', title: 'Move down', ariaLabel: `Move ${v.title} down`, onclick: () => (row.nextElementSibling.after(row), saveMove(row, idAfter(row))) }, icon('down')),
-        seenButton(v, { className: 'icon-btn' }),
+        movable && el('button', { type: 'button', className: 'icon-btn up', title: 'Move up', ariaLabel: `Move ${v.title} up`, onclick: () => (row.previousElementSibling.before(row), saveMove(row, idAfter(row))) }, icon('up')),
+        movable && el('button', { type: 'button', className: 'icon-btn down', title: 'Move down', ariaLabel: `Move ${v.title} down`, onclick: () => (row.nextElementSibling.after(row), saveMove(row, idAfter(row))) }, icon('down')),
+        seenButton(v, 'icon-btn'),
         el('button', { type: 'button', className: 'icon-btn later', ariaPressed: 'true', title: 'Remove from Watch Later', ariaLabel: `Remove ${v.title} from Watch Later`, onclick: () => take(v, 'Removed') }, icon('clock'))));
-    if (FINE_POINTER.matches) row.draggable = true;
+    if (!movable) return row;
+    if (finePointer()) row.draggable = true;
     sorter.attach(row);
     return row;
   };
 
   const { shorts, streams } = filterParams(filters);
-  api('GET', `/api/queue?${new URLSearchParams({ shorts, streams })}`).then(({ videos }) => {
+  api('GET', `/api/queue?${new URLSearchParams({ shorts, streams, order })}`).then(({ videos }) => {
     if (!isCurrentRender(generation)) return;
     sorter.fill(...videos.map(queueRow));
     fill(body, list);
@@ -867,8 +892,6 @@ function renderQueue(group, generation) {
     if (isCurrentRender(generation)) fill(body, emptyBlock('Could not load', err.message));
   });
 }
-
-const FINE_POINTER = matchMedia('(pointer: fine)');
 
 const VIEWS = {
   shelves: { label: 'Shelves', icon: 'shelves', render: renderShelves },

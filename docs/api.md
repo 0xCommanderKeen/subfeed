@@ -15,7 +15,7 @@ The routes the web pages use, and the checks every request passes.
 | `DELETE /api/watched/:videoId` | Mark a video as unwatched. |
 | `PUT /api/position/:videoId` | Body `{ "seconds": <whole number> }`, 1 to 604800. Saves where the player stopped in the video, replacing the place saved before. |
 | `DELETE /api/position/:videoId` | Forget where the player stopped in the video. |
-| `GET /api/queue?shorts=&streams=` | The Watch Later queue, in order. |
+| `GET /api/queue?shorts=&streams=&order=` | The Watch Later queue. `order` is `queue` (the default) for the order set by adding and moving videos, `newest` for the last added first, or `oldest` for the first added first. |
 | `PUT /api/queue/:videoId` | With no body, add the video to the end of the queue. Body `{ "before": "<videoId>" }` moves it in front of that queued video, and `{ "before": null }` moves it to the end. |
 | `DELETE /api/queue/:videoId` | Take a video off the queue. |
 | `POST /api/share` | Body `{ "url": "<YouTube video link>" }`. Adds the video to the end of the queue and answers `{ queued, video, channel }`. When its channel is not in subfeed, `queued` is `false` and nothing is stored. See [Install on a phone](features.md#install-on-a-phone). |

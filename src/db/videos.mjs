@@ -34,13 +34,12 @@ export function videoWriter(db, stamp) {
     ON CONFLICT (video_id) DO UPDATE SET description = excluded.description WHERE description IS NOT excluded.description
   `);
 
-  // Without `announce`, the videos it inserts are never announced: a backfill stores old uploads.
   function writeVideos(videos, { announce = false } = {}) {
     const now = stamp();
     const insertedIds = [];
     const descriptions = [];
     for (const v of videos) {
-      if (!VIDEO_ID.test(v.id ?? '')) continue;
+      if (!VIDEO_ID.test(v.id)) continue;
       const { id, channelId, title, description = null, published, thumbnail, isShort, views, durationS, kind = null } = v;
       const existed = videoExists.get(id);
       const { changes } = upsert.run({ id, channelId, title, titleWords: spacedWords(title), published, thumbnail, isShort: isShort ? 1 : 0, views, durationS, kind, now, announce: announce ? 1 : 0 });
@@ -136,7 +135,6 @@ export function videos(db, tx, writeVideos, stamp) {
       return missingDetails.all({ unavailableSince, limit }).map((r) => ({ id: r.id, isShort: r.isShort === 1 }));
     },
 
-    // views null keeps the stored count.
     applyDetails(details) {
       const now = stamp();
       tx(() => {

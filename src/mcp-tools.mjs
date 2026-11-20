@@ -16,14 +16,14 @@ const MAX_SPAN_YEARS = 10;
 
 export function formatLength({ kind, durationS }) {
   if (KINDS[kind]?.needsDetails) return kind;
-  return durationS === null || durationS === undefined ? null : formatDuration(durationS);
+  return durationS === null ? null : formatDuration(durationS);
 }
 
 export const videoLine = (v, now) =>
   [`${v.favorite ? '★ ' : ''}${v.title}`, v.channelName, formatAge(v.published, now), formatLength(v), v.url].filter((part) => part !== null).join(' · ');
 
 export function parseSince(text, now) {
-  const s = String(text).trim();
+  const s = text.trim();
   const span = s.match(SPAN);
   if (span) {
     const ms = Number(span[1]) * SPAN_MS[span[2].toLowerCase()];
@@ -35,16 +35,22 @@ export function parseSince(text, now) {
 }
 
 export function videoIdFrom(input) {
-  const s = String(input ?? '').trim();
+  const s = input.trim();
   if (VIDEO_ID.test(s)) return s;
   const shared = parseShared(withScheme(s));
   return shared?.kind === 'video' ? shared.id : null;
 }
 
+function videoArg(video) {
+  const id = videoIdFrom(video);
+  if (!id) throw new Error(`"${video}" is not a video id or a YouTube video URL`);
+  return id;
+}
+
 const groupName = (g) => (g.starred ? `★ ${g.label}` : g.label);
 
 export function findGroup(groups, input, noun = 'group') {
-  const s = String(input ?? '').trim();
+  const s = input.trim();
   const byId = groups.find((g) => g.id === s || g.id === `topic:${s}`);
   if (byId) return byId;
   const want = fold(s.replace(/^★\s*/, ''));
@@ -55,7 +61,7 @@ export function findGroup(groups, input, noun = 'group') {
 }
 
 export function findChannel(channels, input) {
-  const s = String(input ?? '').trim();
+  const s = input.trim();
   const want = fold(s);
   const exact = channels.filter((c) => c.id === s || (c.handle && [fold(c.handle), fold(c.handle).slice(1)].includes(want)) || fold(c.name) === want);
   const found = exact.length ? exact : want ? channels.filter((c) => fold(c.name).includes(want)) : [];
@@ -204,7 +210,7 @@ export function subfeedTools({ meta, queryVideos, searchVideos, newVideos, queue
       description: 'Lists the Watch Later queue in queue order, the next video to watch first, whatever its age.',
       inputSchema: object({ include_shorts: INCLUDE_SHORTS }),
       annotations: READ,
-      run({ include_shorts }) {
+      run({ include_shorts = false }) {
         const videos = queue(shortsMode(include_shorts));
         if (!videos.length) return 'Watch Later is empty.';
         return [`${count(videos.length, 'video')} in Watch Later, next first:`, ...videos.map(line)].join('\n');
@@ -223,9 +229,7 @@ export function subfeedTools({ meta, queryVideos, searchVideos, newVideos, queue
       ),
       annotations: { ...WRITE, idempotentHint: true },
       run({ video, favorite = true }) {
-        const id = videoIdFrom(video);
-        if (!id) throw new Error(`"${video}" is not a video id or a YouTube video URL`);
-        const v = setVideoFavorite(id, favorite);
+        const v = setVideoFavorite(videoArg(video), favorite);
         return `${line(v)} · ${v.favorite ? 'starred' : 'not starred'}`;
       },
     },
@@ -237,9 +241,7 @@ export function subfeedTools({ meta, queryVideos, searchVideos, newVideos, queue
       inputSchema: object({ video: VIDEO, queued: { type: 'boolean', description: 'false takes the video off the queue. Default true.' } }, ['video']),
       annotations: { ...WRITE, idempotentHint: true },
       run({ video, queued = true }) {
-        const id = videoIdFrom(video);
-        if (!id) throw new Error(`"${video}" is not a video id or a YouTube video URL`);
-        const v = setVideoQueued(id, queued);
+        const v = setVideoQueued(videoArg(video), queued);
         return `${line(v)} · ${queueState(v)}`;
       },
     },
@@ -274,7 +276,7 @@ export function subfeedTools({ meta, queryVideos, searchVideos, newVideos, queue
         const topicGroups = all.filter((g) => g.params.topic);
         const topics = groups.map((name) => findGroup(topicGroups, name, 'topic').params.topic);
         const { created, channel } = await subscribeChannel({ input, topics });
-        const names = channel.topics.map((id) => m.topics.find((t) => t.id === id)?.name).join(', ') || 'no topic';
+        const names = channel.topics.map((id) => m.topics.find((t) => t.id === id).name).join(', ') || 'no topic';
         const history = channel.backfill === 'running' || channel.backfill === 'queued' ? ' Its full history is loading in the background.' : '';
         const name = `${channel.name} (${channel.handle ?? channel.id})`;
         const done = created ? `Added ${name} in ${names}.` : `${name} was already in subfeed. It is subscribed in ${names}.`;

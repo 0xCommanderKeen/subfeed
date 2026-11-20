@@ -22,9 +22,9 @@ export function ntfySender({ topicUrl, token = null, fetchImpl = fetch }) {
 
 // Each video is marked as notified once its message is sent, so it is never announced twice. One whose message fails
 // stays waiting for the next call.
-export async function notifyNewUploads({ db, send, cap = MAX_PER_REFRESH }) {
+export async function notifyNewUploads({ db, send }) {
   const uploads = db.uploadsToAnnounce();
-  if (uploads.length > cap) {
+  if (uploads.length > MAX_PER_REFRESH) {
     const channels = [...new Set(uploads.map((u) => u.channelName))];
     await send({ title: `${uploads.length} new videos`, body: `From ${channels.join(', ')}`, tags: 'tv' });
     db.markNotified(uploads.map((u) => u.id));

@@ -36,7 +36,10 @@ export function library(db, tx, stamp) {
     ${SUBSCRIBED}
     ${MARK_JOINS}
     WHERE (:isShort IS NULL OR v.is_short = :isShort) AND ${NOT_STREAM}
-    ORDER BY qu.position, qu.added_at
+    ORDER BY
+      CASE WHEN :order = 'newest' THEN qu.added_at END DESC,
+      CASE WHEN :order = 'oldest' THEN qu.added_at END,
+      qu.position, qu.added_at
   `);
   const queueOrder = db.prepare('SELECT video_id AS id FROM queue ORDER BY position, added_at');
   const addQueued = db.prepare(`
@@ -94,6 +97,8 @@ export function library(db, tx, stamp) {
   const insertRule = db.prepare('INSERT INTO rules (kind, pattern, words, channel_id, topic_id) VALUES (:kind, :pattern, :words, :channelId, :topicId)');
   const removeRule = db.prepare('DELETE FROM rules WHERE id = ?');
   const removeBackfill = db.prepare('DELETE FROM backfills WHERE channel_id = ?');
+  const seededRow = db.prepare('SELECT seeded FROM meta');
+  const anyChannel = db.prepare('SELECT 1 FROM channels LIMIT 1');
 
   const linkTopics = (channelId, topicIds) => {
     for (const topicId of topicIds) insertLink.run(channelId, topicId);
@@ -125,8 +130,9 @@ export function library(db, tx, stamp) {
       else removeFavorite.run(videoId);
     },
 
-    listQueue({ shorts = 'include', streams = 'include' } = {}) {
-      return queueRows.all({ isShort: SHORTS_FILTER[shorts], hideStreams: HIDE_STREAMS[streams] }).map(toVideo);
+    // `order` is 'queue' for the order the user set, or 'newest' or 'oldest' by the time each video was added.
+    listQueue({ shorts = 'include', streams = 'include', order = 'queue' } = {}) {
+      return queueRows.all({ isShort: SHORTS_FILTER[shorts], hideStreams: HIDE_STREAMS[streams], order }).map(toVideo);
     },
 
     enqueue(videoId) {
@@ -170,9 +176,9 @@ export function library(db, tx, stamp) {
 
     // Runs once per database: returns false without calling `load` if it already ran or channels exist.
     seedChannels(load) {
-      if (db.prepare('SELECT seeded FROM meta').get().seeded) return false;
+      if (seededRow.get().seeded) return false;
       return tx(() => {
-        const empty = !db.prepare('SELECT 1 FROM channels LIMIT 1').get();
+        const empty = !anyChannel.get();
         if (empty) {
           const { topics, channels, rules = [] } = load();
           const now = stamp();

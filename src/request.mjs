@@ -55,7 +55,7 @@ export const oneOf = (values) =>
 // '/api/topics/:id' -> /^\/api\/topics\/(?<id>[^/]+)$/
 export const pathPattern = (path) => new RegExp(`^${path.replace(/:(\w+)/g, '(?<$1>[^/]+)')}$`);
 
-async function readObject(req, { optional = false } = {}) {
+async function readObject(req, { optional }) {
   const text = await readBody(req);
   if (text === null) throw new HttpError(413, 'body too large');
   if (optional && !text.trim()) return {};

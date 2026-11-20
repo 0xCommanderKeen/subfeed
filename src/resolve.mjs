@@ -104,7 +104,6 @@ export function resolveChannel(ref, { api = null, fetchImpl }) {
 
 // A shared video, as stored in `videos`, with its channel's name: { id, channelId, channelName, title, published,
 // thumbnail, isShort, views, durationS, kind }. Neither source says whether a video is a Short, so the caller does.
-
 export function parseApiVideo(body, isShort) {
   const item = body?.items?.[0];
   if (!item) return null;
@@ -131,7 +130,7 @@ const jsonString = (html, key) => {
 export function parseWatchPage(html, id, isShort) {
   const channelId = jsonString(html, 'externalChannelId');
   const published = html.match(/<meta itemprop="datePublished" content="([^"]+)"/)?.[1] ?? jsonString(html, 'publishDate');
-  if (!CHANNEL_ID.test(channelId ?? '') || !published) return null;
+  if (!CHANNEL_ID.test(channelId) || !published) return null;
   const title = html.match(/<meta property="og:title" content="([^"]*)"/)?.[1];
   const length = Number(jsonString(html, 'lengthSeconds'));
   const views = jsonString(html, 'viewCount');

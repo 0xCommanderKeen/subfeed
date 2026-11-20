@@ -43,7 +43,7 @@ function csvRows(text) {
 }
 
 export function parseSubscriptionsCsv(text) {
-  const [header = [], ...rows] = csvRows(String(text).replace(/^﻿/, ''));
+  const [header = [], ...rows] = csvRows(text.replace(/^﻿/, ''));
   const column = (name) => header.findIndex((h) => h.trim().toLowerCase() === name);
   const idAt = column('channel id');
   const titleAt = column('channel title');
@@ -52,7 +52,7 @@ export function parseSubscriptionsCsv(text) {
   const channels = [];
   for (const row of rows) {
     const id = row[idAt]?.trim();
-    if (!CHANNEL_ID.test(id ?? '') || seen.has(id)) continue;
+    if (!CHANNEL_ID.test(id) || seen.has(id)) continue;
     seen.add(id);
     channels.push({ id, title: row[titleAt]?.trim() || id });
   }
@@ -74,7 +74,7 @@ const stem = (w) => {
 export function keywordSuggestions(channels, topics) {
   const stems = topics.map((t) => ({ id: t.id, stems: words(t.name).filter((w) => !STOPWORDS.has(w)).map(stem) }));
   return channels.map((c) => {
-    const text = words(`${c.name} ${c.description ?? ''}`);
+    const text = words(`${c.name} ${c.description}`);
     return stems.filter((t) => t.stems.length && t.stems.some((s) => text.some((w) => w.startsWith(s)))).map((t) => t.id);
   });
 }
@@ -115,7 +115,7 @@ export function claudeSuggester(key, fetchImpl = fetch) {
   async function ask(channels, topics) {
     const input = {
       groups: topics.map(({ id, name, examples }) => ({ id, name, exampleChannels: examples })),
-      channels: channels.map(({ id, name, description }) => ({ id, title: name, description: (description ?? '').slice(0, DESCRIPTION_CHARS) })),
+      channels: channels.map(({ id, name, description }) => ({ id, title: name, description: description.slice(0, DESCRIPTION_CHARS) })),
     };
     const res = await fetchImpl('https://api.anthropic.com/v1/messages', {
       method: 'POST',

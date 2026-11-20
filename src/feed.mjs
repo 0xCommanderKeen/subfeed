@@ -30,7 +30,7 @@ function entryToVideo(entry, channelId, isShort) {
   const id = pick(/<yt:videoId>([^<]+)<\/yt:videoId>/);
   const title = pick(/<title>([^<]*)<\/title>/);
   const published = new Date(pick(/<published>([^<]+)<\/published>/) ?? NaN);
-  if (!VIDEO_ID.test(id ?? '') || title === undefined || Number.isNaN(published.getTime())) return null;
+  if (!VIDEO_ID.test(id) || title === undefined || Number.isNaN(published.getTime())) return null;
   const thumbnail = pick(/<media:thumbnail url="([^"]+)"/);
   const views = pick(/<media:statistics views="(\d+)"/);
   const description = pick(/<media:description>([^<]*)<\/media:description>/);

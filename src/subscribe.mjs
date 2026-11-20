@@ -1,4 +1,3 @@
-import { fetchChannelFeeds } from './feed.mjs';
 import { refreshFeeds } from './refresh.mjs';
 import { resolveChannel } from './resolve.mjs';
 
@@ -6,7 +5,7 @@ import { resolveChannel } from './resolve.mjs';
 export class LookupError extends Error {}
 
 // A known channel needs no YouTube lookup. `topicIds` must name existing topics.
-export async function subscribeChannel(db, ref, topicIds, { api = null, fetchPage, fetchFeeds = fetchChannelFeeds, onChannel } = {}) {
+export async function subscribeChannel(db, ref, topicIds, { api = null, fetchPage, fetchFeeds, onChannel }) {
   let channel = db
     .listChannels()
     .find((c) => (ref.kind === 'id' ? c.id === ref.id : c.handle?.toLowerCase() === ref.handle.toLowerCase()));

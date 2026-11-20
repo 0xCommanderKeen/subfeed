@@ -42,7 +42,7 @@ Other controls, at the bottom of the sidebar:
 - **Refresh** reads every channel's feeds now instead of waiting for the next 30-minute refresh. It shows the time of the last refresh, and under its name the YouTube Data API units used today. See [Durations and kinds](youtube-api.md#durations-and-kinds).
 - **Manage** opens the channel and topic page.
 
-A notice at the top of the page lists any channels whose feed failed to load.
+A notice at the top of the page names the channels whose feed failed in two refreshes in a row and links to Manage, which shows each channel's error. A channel that fails once is not named: a slow YouTube answer often times out a few channels, most of all in the first refresh after a restart, and the next refresh retries them.
 
 ### Keyboard shortcuts
 
@@ -79,11 +79,11 @@ See [Watch Later](#watch-later) for playing through the queue.
 ★ Videos keeps the videos you loved. Watch Later is a queue of videos to watch next, and it empties as you watch.
 
 - Click the clock on any video card to add the video to the end of the queue. The Watch Later tab in the sidebar shows how many videos are queued.
-- The Watch Later page lists the queue in order, first added first.
+- The Watch Later page lists the queue in order, first added first. The switch at the top shows it as **Queue**, your own order, **Newest added**, last added first, or **Oldest added**, first added first. The choice is remembered on the device. Playing through the queue follows the order on screen.
 - Clicking a video on the page plays it and then the rest of the queue in order. When a video ends, it is marked watched and comes off the queue, and the next one starts. A message at the bottom of the page offers Undo for six seconds, which puts the video back where it was. Opening a video on YouTube from the player, or with middle-click or Cmd-click on the page, also takes it off the queue. The clock on a row takes the video off without opening it, also with Undo.
 - Previous and Next in the player move through the queue without taking videos off. Upcoming premieres and streams are skipped; clicking one opens it on youtube.com, and it stays queued. After the last video ends, the player closes.
 - The check mark on a row marks the video watched or unwatched. The video stays in the queue.
-- To reorder, use the up and down arrows on each row. With a mouse, you can also drag a row.
+- To reorder, use the up and down arrows on each row. With a mouse, you can also drag a row. Rows move only in the Queue order: Newest added and Oldest added hide the arrows and do not drag.
 
 The queue is stored in the database, so every device sees the same queue. Hide Shorts applies to the page and to the count. Like every list, the queue shows only subscribed channels' videos: unsubscribing hides a channel's queued videos, and resubscribing brings them back. Deleting a channel removes its videos from the queue.
 

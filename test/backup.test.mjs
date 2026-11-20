@@ -94,13 +94,22 @@ test('restoring a snapshot over the database brings back exactly the snapshot st
 test('a failed backup is logged and reported once per check, leaving no partial file', async () => {
   const dir = tempDir();
   const failures = [];
-  const broken = { snapshot: () => { throw new Error('disk full'); }, listTopics: () => [], listChannels: () => [] };
+  const broken = { now: () => new Date(), snapshot: () => { throw new Error('disk full'); }, listTopics: () => [], listChannels: () => [] };
   const stop = scheduleBackups(broken, { dir, firstDelayMs: 0, onFailure: (err) => failures.push(err.message) });
   await new Promise((r) => setTimeout(r, 20));
   stop();
   assert.deepEqual(failures, ['disk full']);
   assert.deepEqual(readdirSync(dir), []);
   assert.ok(existsSync(dir));
+});
+
+test('a scheduled backup names its snapshot by the database clock, not the real one', async () => {
+  const dir = tempDir();
+  const db = openDb(join(tempDir(), 'subfeed.db'), { now: () => at('2026-11-15') });
+  const stop = scheduleBackups(db, { dir, firstDelayMs: 0, onFailure: (err) => assert.fail(err) });
+  await new Promise((r) => setTimeout(r, 50));
+  stop();
+  assert.deepEqual(readdirSync(dir).sort(), ['channels-2026-11-15.json', 'subfeed-2026-11-15.db']);
 });
 
 test('a run deletes the partial snapshots that earlier days left behind, and the channels file holds the rules', () => {

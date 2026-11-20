@@ -9,6 +9,12 @@ export const INACTIVE_PERIODS = [
 ];
 export const DEFAULT_INACTIVE_DAYS = 180;
 
+// Unsubscribing stops a running or queued backfill, and resubscribing does not start it again.
+export const backfilling = (c) => c.backfill === 'running' || c.backfill === 'queued';
+
+export const stopBackfillQuestion = (channels) =>
+  `Unsubscribing stops the backfill of ${channels.map((c) => c.name).join(', ')}, and Undo does not start it again. Unsubscribe anyway?`;
+
 export function lastUpload(channel) {
   const times = Object.values(channel.latest).filter(Boolean);
   return times.length ? times.reduce((a, b) => (a > b ? a : b)) : null;

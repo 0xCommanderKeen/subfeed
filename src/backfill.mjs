@@ -71,7 +71,7 @@ export async function fillMissingDetails({ db, api, maxCalls }) {
   for (let i = 0; i < missing.length; i += MAX_PER_CALL) {
     const batch = missing.slice(i, i + MAX_PER_CALL);
     const items = await fetchDetails(api, batch.map((v) => v.id));
-    db.applyDetails(batch.map((v) => ({ id: v.id, ...videoDetails(items.get(v.id), v.isShort) })));
+    db.applyDetails(withDetails(batch, items));
   }
   return missing.length;
 }
@@ -141,7 +141,9 @@ export async function backfillChannel(channel, { api, db, owner = randomUUID(), 
           if (err instanceof ApiError && err.status === 404) break;
           throw err;
         }
-        const videos = playlistItemsToVideos(page.items ?? [], channel.id, kind.isShort);
+        // Read as an empty last page, it would mark the channel done with the rest of the playlist unread.
+        if (!Array.isArray(page.items)) throw new ApiError(200, 'noItems', 'playlistItems.list answered without items');
+        const videos = playlistItemsToVideos(page.items, channel.id, kind.isShort);
         const known = db.videosWithDuration(videos.map((v) => v.id));
         const ask = videos.filter((v) => !known.has(v.id));
         const details = ask.length ? withDetails(ask, await fetchDetails(call, ask.map((v) => v.id))) : [];

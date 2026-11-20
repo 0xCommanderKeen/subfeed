@@ -36,10 +36,9 @@ export function mountImport({ fileInput, fileName, root, topics, onChange }) {
   };
 
   const toggleTopic = (id, topicId) => {
-    const picked = state.picks.get(id) ?? new Set();
+    const picked = state.picks.get(id);
     if (picked.has(topicId)) picked.delete(topicId);
     else picked.add(topicId);
-    state.picks.set(id, picked);
     render();
   };
 
@@ -62,7 +61,7 @@ export function mountImport({ fileInput, fileName, root, topics, onChange }) {
   async function runImport() {
     const channels = state.preview.channels
       .filter((c) => state.picks.has(c.id))
-      .map(({ id, name, handle, avatar: url }) => ({ id, name, handle, avatar: url, topics: [...state.picks.get(id)] }));
+      .map(({ id, name, handle, avatar }) => ({ id, name, handle, avatar, topics: [...state.picks.get(id)] }));
     set({ ...state, phase: 'importing' });
     try {
       set({ phase: 'done', result: await api('POST', '/api/import', { channels }) });

@@ -200,6 +200,7 @@ kbd { min-width: 20px; padding: 1px 5px; border: 1px solid var(--line-2); border
 
 .notice { margin: 16px var(--pad) 0; padding: 10px 14px; border: 1px solid #5a3a1d; background: #22150c; color: #f2c9a0; border-radius: 8px; font-size: 13px; }
 .notice:empty { display: none; }
+.notice a { color: inherit; }
 
 .hero { display: flex; align-items: flex-end; gap: 18px 30px; flex-wrap: wrap; padding: 44px var(--pad) 8px; }
 .hero h1 { margin: 0; font-weight: 900; font-stretch: 125%; font-size: clamp(38px, 6.2vw, 84px); line-height: 0.9; letter-spacing: -0.02em; text-transform: uppercase; animation: in 0.6s var(--ease) both; overflow-wrap: anywhere; }

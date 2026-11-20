@@ -212,6 +212,21 @@ test('a channel that a live run holds is not backfilled by another, and a run wh
   assert.equal(takeover.calls[0].pageToken, '50');
 });
 
+test('a playlistItems answer without items fails the backfill at its page, and the next run reads that page again', async () => {
+  const db = channelDb();
+  const channel = bigChannel(150);
+  let pages = 0;
+  const api = (endpoint, params) => (endpoint === 'playlistItems' && ++pages === 2 ? Promise.resolve({}) : channel.api(endpoint, params));
+  await assert.rejects(backfillChannel(A, { api, db }), (err) => err instanceof ApiError && err.reason === 'noItems');
+  const row = db.backfill(A.id);
+  assert.equal(row.state, 'error');
+  assert.deepEqual([row.playlist, row.pageToken, row.long], ['UULFaaaaaaaaaaaaaaaaaaaaaa', '50', 50]);
+
+  const again = bigChannel(150);
+  assert.deepEqual(await backfillChannel(A, { api: again.api, db }), { long: 150, short: 0 });
+  assert.equal(again.calls[0].pageToken, '50');
+});
+
 test('a second createApp on the same database resumes the running backfill at its page and runs the queued one', async () => {
   const db = channelDb();
   const app = (api) => testApp({ db, api });

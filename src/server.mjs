@@ -33,6 +33,7 @@ const PUBLIC_DIR = join(import.meta.dirname, '..', 'public');
 const REFRESH_EVERY_MS = 30 * 60 * 1000;
 const SHUTDOWN_GRACE_MS = 5000;
 const MAX_PATTERN = 100;
+const MAX_CHANNEL_INPUT = 300;
 const MAX_TOPIC_NAME = 60;
 const MAX_PER_CHANNEL = 50;
 const MAX_IMPORT_NAME = 200;
@@ -187,9 +188,10 @@ export function createApp({
   if (!fetchPage) throw new Error('createApp needs fetchPage: pass fetch, or a fake in tests so none reaches youtube.com');
   const { now } = db;
   const apiMeter = api && dbMeter(db, api);
-  // channelId -> { ok, error?, lastFetched }; absent until the channel's first fetch finishes.
+  // channelId -> { ok, error?, failedRuns, lastFetched }; absent until the channel's first fetch finishes. failedRuns
+  // counts the fetches in a row that failed: one slow refresh, such as the first after a restart, often times out a few.
   const channelStatus = new Map();
-  const fetchStatus = (id) => channelStatus.get(id) ?? { ok: null, lastFetched: null };
+  const fetchStatus = (id) => channelStatus.get(id) ?? { ok: null, failedRuns: 0, lastFetched: null };
   const backfills = backfillQueue({ db, apiMeter, wait });
   let lastRefresh = null;
   // Data API units the last refresh spent on video details; null before the first refresh.
@@ -206,7 +208,9 @@ export function createApp({
 
   function recordStatus(id, error) {
     const previous = channelStatus.get(id);
-    channelStatus.set(id, error ? { ok: false, error, lastFetched: previous?.lastFetched ?? null } : { ok: true, lastFetched: now().toISOString() });
+    channelStatus.set(id, error
+      ? { ok: false, error, failedRuns: (previous?.failedRuns ?? 0) + 1, lastFetched: previous?.lastFetched ?? null }
+      : { ok: true, failedRuns: 0, lastFetched: now().toISOString() });
   }
 
   // Refreshing one channel (added or resubscribed) never notifies: only the refresh of every channel does.
@@ -343,8 +347,7 @@ export function createApp({
     };
   }
 
-  // `{ topic?, channel?, favoriteChannels?, shorts, streams?, length?, favoritesOnly?, queuedOnly?, sort?, limit, before? }`,
-  // already checked.
+  // The filters of VIDEOS_QUERY, already checked and renamed by videoFilters.
   function queryVideos(filters) {
     const cat = catalog();
     const query = inGroup(filters, cat.channels);
@@ -366,8 +369,8 @@ export function createApp({
     return {
       videos: withVelocities(videos, now().toISOString()).map(({ rank, ...v }) => withLinks(v, cat.byId)),
       nextCursor: more ? searchCursor.encode(last.rank, last.published, last.id) : null,
-      ...(total !== undefined && { total }),
-      ...(totalCapped && { totalCapped }),
+      total,
+      totalCapped,
     };
   }
 
@@ -398,9 +401,9 @@ export function createApp({
   }
 
   // Like every list, the queue holds only subscribed channels' videos.
-  function listQueue({ shorts, streams }) {
+  function listQueue({ shorts, streams, order }) {
     const byId = catalog().byId;
-    return { videos: db.listQueue({ shorts, streams }).map((v) => withLinks(v, byId)) };
+    return { videos: db.listQueue({ shorts, streams, order }).map((v) => withLinks(v, byId)) };
   }
 
   function recordVisit({ group, seenAt }) {
@@ -416,7 +419,7 @@ export function createApp({
 
   // `topics` are existing topic ids; the HTTP route and the MCP tool both check them.
   async function subscribeChannelRequest({ input, topics }) {
-    if (input.length > 300) throw new HttpError(400, INPUT_HELP);
+    if (input.length > MAX_CHANNEL_INPUT) throw new HttpError(400, INPUT_HELP);
     const ref = parseChannelInput(input);
     if (!ref) throw new HttpError(400, `Not a channel handle or URL. ${INPUT_HELP}`);
     let result;
@@ -531,7 +534,7 @@ export function createApp({
     }
     db.enqueue(video.id);
     const { id, name, subscribed } = byId.get(video.channelId);
-    return { queued: true, video: withLinks(video, byId), channel: { id, name, subscribed: Boolean(subscribed) } };
+    return { queued: true, video: withLinks(video, byId), channel: { id, name, subscribed } };
   }
 
   // A field left undefined keeps its value.
@@ -608,7 +611,7 @@ export function createApp({
 
   // Each route declares its path `params`, `query` and `body` fields; see parseRequest. The handler gets them as one
   // object of checked values, and an AbortSignal for a client that goes away. A handler returning undefined answers 204.
-  // Every route has a row in README.md's API table.
+  // Every route has a row in the Routes table of docs/api.md.
   const ID = { id: channelId };
   const VIDEO = { videoId };
   const TOPIC = { id: knownTopic };
@@ -654,7 +657,7 @@ export function createApp({
     { method: 'DELETE', path: '/api/rules/:id', params: { id: int(1) }, handler: deleteRule },
     { method: 'PUT', path: '/api/favorites/:videoId', params: VIDEO, handler: ({ videoId }) => void setVideoFavorite(videoId, true) },
     { method: 'DELETE', path: '/api/favorites/:videoId', params: VIDEO, handler: ({ videoId }) => void setVideoFavorite(videoId, false) },
-    { method: 'GET', path: '/api/queue', query: { shorts: SHORTS, streams: STREAMS }, handler: listQueue },
+    { method: 'GET', path: '/api/queue', query: { shorts: SHORTS, streams: STREAMS, order: optional(oneOf(['queue', 'newest', 'oldest']), 'queue') }, handler: listQueue },
     {
       method: 'PUT', path: '/api/queue/:videoId', params: VIDEO, body: { before: optional(nullable(videoId)) }, optionalBody: true,
       handler: ({ videoId, before }) => void setVideoQueued(videoId, true, before),
@@ -663,8 +666,8 @@ export function createApp({
     { method: 'POST', path: '/api/share', body: { url: sharedVideo }, handler: shareVideo },
     { method: 'PUT', path: '/api/watched/:videoId', params: VIDEO, handler: ({ videoId }) => void setVideoWatched(videoId, true) },
     { method: 'DELETE', path: '/api/watched/:videoId', params: VIDEO, handler: ({ videoId }) => void setVideoWatched(videoId, false) },
-    { method: 'PUT', path: '/api/position/:videoId', params: VIDEO, body: { seconds: int(1, MAX_POSITION) }, handler: ({ videoId, seconds }) => setVideoPosition(videoId, seconds) },
-    { method: 'DELETE', path: '/api/position/:videoId', params: VIDEO, handler: ({ videoId }) => setVideoPosition(videoId, null) },
+    { method: 'PUT', path: '/api/position/:videoId', params: VIDEO, body: { seconds: int(1, MAX_POSITION) }, handler: ({ videoId, seconds }) => void setVideoPosition(videoId, seconds) },
+    { method: 'DELETE', path: '/api/position/:videoId', params: VIDEO, handler: ({ videoId }) => void setVideoPosition(videoId, null) },
   ].map((route) => ({ ...route, pattern: pathPattern(route.path) }));
 
   async function handleApi(req, res, url) {

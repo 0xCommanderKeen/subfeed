@@ -14,12 +14,12 @@ export const SHORTCUTS = [
 // The elements j/k move between: video cards, and the rows of the Watch Later page.
 export const VIDEO_ITEM = '.card, .queue-row';
 
+// `[` belongs to the sidebar.
 const HANDLED = new Map(SHORTCUTS.flatMap((s) => s.keys.filter((k) => k !== 'Enter' && k !== '[').map((k) => [k, s.action])));
 
 // True when the key goes to a text field, so a page shortcut must leave it alone.
 export const isTyping = (target) => Boolean(target?.closest?.('input:not([type="checkbox"]), textarea, select, [contenteditable]'));
 
-// `[` belongs to the sidebar.
 export function shortcutAction(e) {
   if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return null;
   return HANDLED.get(e.key) ?? null;

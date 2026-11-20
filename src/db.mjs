@@ -46,13 +46,13 @@ function useWal(db) {
 const OPTIMIZE = 'PRAGMA optimize = 0x10002';
 
 // Search on a connection of its own, for the server's search worker. It never writes; openDb has made the schema.
-export function openSearchDb(file = DB_PATH) {
+export function openSearchDb(file) {
   const db = new DatabaseSync(file, { readOnly: true });
   db.exec('PRAGMA busy_timeout = 5000');
   return searchPageOn(db);
 }
 
-export function openDb(file = DB_PATH, { now = () => new Date() } = {}) {
+export function openDb(file, { now = () => new Date() } = {}) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.function('spaced_words', { deterministic: true }, spacedWords);

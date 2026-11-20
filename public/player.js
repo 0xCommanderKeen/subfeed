@@ -117,7 +117,7 @@ export function openPlayer(videos, index, { playThrough = false, onWatched, onDo
     if (!started) return;
     const v = video();
     const at = positionToSave(v, yt.getCurrentTime(), yt.getDuration());
-    if (at !== (v.position ?? null)) onPosition(v, at);
+    if (at !== v.position) onPosition(v, at);
   }
 
   const savePositionIfHidden = () => document.visibilityState === 'hidden' && savePosition();

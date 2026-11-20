@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { inactiveChannels, lastUpload, lastUploadText, tickedChannels } from '../public/activity.js';
+import { backfilling, inactiveChannels, lastUpload, lastUploadText, stopBackfillQuestion, tickedChannels } from '../public/activity.js';
 
 const now = new Date('2026-11-16T12:00:00Z');
 const channel = (name, latest, subscribed = true) => ({ id: name, name, subscribed, latest: { long: null, short: null, stream: null, ...latest } });
@@ -48,4 +48,12 @@ test('bulk actions take only the ticked channels the list still shows', () => {
   assert.deepEqual(names(inactive(90, 'mum')), ['Mumbo']);
   assert.deepEqual(names({ view: 'all', filter: 'garden', days: 90 }), ['Coding Garden']);
   assert.deepEqual(names({ view: 'all', filter: '', days: 90 }), ['Mumbo', 'Teaching Tech', 'Coding Garden']);
+});
+
+test('unsubscribing asks first only for channels whose backfill runs or waits, and names them', () => {
+  const states = ['running', 'queued', 'done', 'failed', null];
+  const channels = states.map((backfill) => ({ name: String(backfill), backfill }));
+  assert.deepEqual(channels.filter(backfilling).map((c) => c.name), ['running', 'queued']);
+  assert.equal(stopBackfillQuestion([{ name: 'Mumbo' }, { name: 'Teaching Tech' }]),
+    'Unsubscribing stops the backfill of Mumbo, Teaching Tech, and Undo does not start it again. Unsubscribe anyway?');
 });

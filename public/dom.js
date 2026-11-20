@@ -89,6 +89,8 @@ export function avatar(name, className = 'avatar', url = null) {
   return node;
 }
 
+export const finePointer = () => matchMedia('(pointer: fine)').matches;
+
 export const youtubeChannelUrl = (c) => `https://www.youtube.com/channel/${c.id}`;
 
 export const channelLink = (c) => el('a', { href: youtubeChannelUrl(c), target: '_blank', rel: 'noopener', className: 'channel-name', textContent: c.name });

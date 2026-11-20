@@ -364,12 +364,20 @@ test('a refresh where one channel fails stores the others and reports the failur
   assert.equal(body.lastRefresh, NOW.toISOString());
   assert.equal(body.totalVideos, 1);
   assert.deepEqual(
-    [channelIn(body.channels, A), channelIn(body.channels, B)].map(({ ok, error, lastFetched, counts }) => ({ ok, error, lastFetched, long: counts.long })),
+    [channelIn(body.channels, A), channelIn(body.channels, B)].map(({ ok, error, failedRuns, lastFetched, counts }) => ({ ok, error, failedRuns, lastFetched, long: counts.long })),
     [
-      { ok: true, error: undefined, lastFetched: NOW.toISOString(), long: 1 },
-      { ok: false, error: 'HTTP 500', lastFetched: null, long: 0 },
+      { ok: true, error: undefined, failedRuns: 0, lastFetched: NOW.toISOString(), long: 1 },
+      { ok: false, error: 'HTTP 500', failedRuns: 1, lastFetched: null, long: 0 },
     ],
   );
+});
+
+test('failedRuns counts the refreshes in a row that failed a channel and goes back to 0 when one succeeds', async (t) => {
+  const answers = [{ videos: [], error: 'timeout' }, { videos: [], error: 'timeout' }, { videos: [video(A, 1)], error: null }];
+  const s = await start(t, { channels: [A], fetchFeeds: async () => answers.shift() });
+  const runs = [];
+  for (let i = 0; i < 3; i++) runs.push(channelIn((await s.json('POST', '/api/refresh')).body.channels, A).failedRuns);
+  assert.deepEqual(runs, [1, 2, 0]);
 });
 
 test('unsubscribing cancels a running backfill before its next API call', async (t) => {
@@ -468,6 +476,21 @@ const SHARED = 'dQw4w9WgXcQ';
 const watchPages = (channelId) => async (url) =>
   url === `https://www.youtube.com/watch?v=${SHARED}` ? new Response(watchPage.replaceAll(RICK, channelId)) : new Response('<html></html>');
 const queueIds = async (s) => (await s.json('GET', '/api/queue')).body.videos.map((v) => v.id);
+
+test('Watch Later lists the queue in the order set by moves, or by when each video was added, newest or oldest first', async (t) => {
+  let tick = 0;
+  const s = await start(t, { now: () => new Date(NOW.getTime() + 1000 * tick++) });
+  const [first, second, third] = [video(A, 1), video(A, 2), video(B, 3)];
+  s.db.upsertVideos([first, second, third]);
+  for (const v of [first, second, third]) assert.equal((await s.json('PUT', `/api/queue/${v.id}`)).status, 204);
+  await s.json('PUT', `/api/queue/${first.id}`, { before: null });
+  const ids = async (order) => (await s.json('GET', `/api/queue?order=${order}`)).body.videos.map((v) => v.id);
+  assert.deepEqual(await queueIds(s), [second.id, third.id, first.id], 'the default is the order set by moves');
+  assert.deepEqual(await ids('queue'), [second.id, third.id, first.id]);
+  assert.deepEqual(await ids('newest'), [third.id, second.id, first.id]);
+  assert.deepEqual(await ids('oldest'), [first.id, second.id, third.id]);
+  assert.equal((await s.json('GET', '/api/queue?order=random')).status, 400);
+});
 
 test('sharing a stored video puts it at the end of Watch Later without asking YouTube', async (t) => {
   const s = await start(t, { fetchPage: async () => assert.fail('no YouTube lookup for a stored video') });

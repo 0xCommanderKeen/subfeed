@@ -1,9 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { exportChannels } from './channels-file.mjs';
-import { DB_PATH, quickCheck } from './db.mjs';
+import { quickCheck } from './db.mjs';
 
-const BACKUP_DIR = join(dirname(DB_PATH), 'backups');
 const SNAPSHOT = /^subfeed-(\d{4}-\d{2}-\d{2})\.db$/;
 const PARTIAL = /^subfeed-\d{4}-\d{2}-\d{2}\.db\.partial$/;
 const KEEP_DAILY = 7;
@@ -41,7 +40,7 @@ export function daysToKeep(days, { daily = KEEP_DAILY, weekly = KEEP_WEEKLY } = 
 
 const listDays = (dir) => readdirSync(dir).map((f) => f.match(SNAPSHOT)?.[1]).filter(Boolean);
 
-export function runBackup(db, { now = new Date(), dir = BACKUP_DIR } = {}) {
+export function runBackup(db, { now = db.now(), dir }) {
   mkdirSync(dir, { recursive: true });
   // VACUUM INTO refuses an existing file, and a half-written snapshot must never pass for a finished one.
   for (const f of readdirSync(dir).filter((f) => PARTIAL.test(f))) rmSync(join(dir, f), { force: true });
@@ -62,8 +61,9 @@ export function runBackup(db, { now = new Date(), dir = BACKUP_DIR } = {}) {
     writeFileSync(join(dir, channelsName(day)), exportChannels(db));
     created = true;
   }
-  const keep = daysToKeep(listDays(dir));
-  const removed = listDays(dir).filter((d) => !keep.has(d));
+  const days = listDays(dir);
+  const keep = daysToKeep(days);
+  const removed = days.filter((d) => !keep.has(d));
   for (const d of removed) {
     rmSync(join(dir, snapshotName(d)), { force: true });
     rmSync(join(dir, channelsName(d)), { force: true });
@@ -73,7 +73,7 @@ export function runBackup(db, { now = new Date(), dir = BACKUP_DIR } = {}) {
 
 // Checks every hour and once shortly after start, so today's snapshot appears soon after midnight UTC
 // and a server that was down at that time catches up.
-export function scheduleBackups(db, { onFailure = () => {}, dir = BACKUP_DIR, firstDelayMs = 60_000, everyMs = 60 * 60_000 } = {}) {
+export function scheduleBackups(db, { onFailure, dir, firstDelayMs = 60_000, everyMs = 60 * 60_000 }) {
   const check = () => {
     try {
       const r = runBackup(db, { dir });
