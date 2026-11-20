@@ -9,7 +9,7 @@ import { plural, whole } from './vocab.js';
 const POLL_MS = 1500;
 const NO_TOPIC = '';
 const CLOSED = { kind: 'none' };
-const resumeTime = new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+const dayTime = new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
 const state = {
   data: null,
@@ -53,6 +53,10 @@ const els = {
   channels: document.getElementById('channel-groups'),
   rules: document.getElementById('rule-list'),
   ruleForm: document.getElementById('rule-form'),
+  importFile: document.getElementById('import-file'),
+  importFileName: document.getElementById('import-file-name'),
+  youtubePanel: document.getElementById('youtube-panel'),
+  youtubeStatus: document.getElementById('youtube-status'),
 };
 
 const topicName = (id) => state.data.topics.find((t) => t.id === id)?.name ?? id;
@@ -82,12 +86,14 @@ const nav = mountNav({
     }
   },
 });
-const importer = mountImport({
-  fileInput: document.getElementById('import-file'),
-  fileName: document.getElementById('import-file-name'),
-  root: document.getElementById('import-review'),
-  topics: () => state.data.topics,
-  onChange: () => load(),
+const fileImport = mountImport({ root: document.getElementById('import-review'), source: 'csv', topics: () => state.data.topics, onChange: () => load() });
+const youtubeImport = mountImport({ root: document.getElementById('youtube-review'), source: 'youtube', topics: () => state.data.topics, onChange: () => load() });
+els.importFile.addEventListener('change', async () => {
+  const file = els.importFile.files[0];
+  if (!file) return;
+  els.importFileName.textContent = file.name;
+  await fileImport.open(async () => api('POST', '/api/import/preview', { csv: await file.text() }));
+  els.importFile.value = '';
 });
 const renderNav = () => state.meta && nav.render({ groups: buildGroups(state.meta), meta: state.meta, current: null });
 
@@ -168,7 +174,7 @@ function redraw(...parts) {
   schedulePoll();
 }
 
-const render = () => redraw(renderSummary, renderAddTopics, renderAddResult, renderTopics, renderRules, renderTools, renderChannels, renderNav, importer.render);
+const render = () => redraw(renderSummary, renderAddTopics, renderAddResult, renderYoutube, renderTopics, renderRules, renderTools, renderChannels, renderNav, fileImport.render, youtubeImport.render);
 const renderProgress = () => redraw(renderSummary, renderAddResult, renderChannels);
 
 // `key` names the button for render() to put focus back on. Other props go to el as they are.
@@ -182,8 +188,30 @@ function renderSummary() {
   const parts = [plural(subscribed, 'subscribed channel'), `${channels.length - subscribed} unsubscribed`];
   parts.push(backfillAvailable ? `${plural(apiUnits, 'API unit')} used since the server started` : 'no YouTube API key: new channels get RSS videos only');
   const paused = channels.find((c) => c.backfillDetail?.pausedUntil);
-  if (paused) parts.push(`backfills paused for the daily API quota, continuing ${resumeTime.format(new Date(paused.backfillDetail.pausedUntil))}`);
+  if (paused) parts.push(`backfills paused for the daily API quota, continuing ${dayTime.format(new Date(paused.backfillDetail.pausedUntil))}`);
   els.summary.textContent = parts.join(' · ');
+}
+
+// The YouTube panel shows only when the server checks the owner's subscriptions. A failed check keeps the last count.
+function youtubeCount({ newChannels, checkedAt, error }) {
+  const line = (textContent, className = '') => el('p', { className, textContent });
+  if (!checkedAt) return line('subfeed reads your YouTube subscriptions at the next refresh.', 'muted');
+  if (newChannels) {
+    return el('div', { className: 'pick' },
+      line(`${plural(newChannels, 'channel')} you subscribe to on YouTube ${newChannels === 1 ? 'is' : 'are'} not in subfeed.`),
+      button('Review', () => youtubeImport.open(() => api('POST', '/api/youtube-subscriptions/preview')), { key: 'youtube-review', className: 'btn primary' }));
+  }
+  return error ? null : line('Every channel you subscribe to on YouTube is in subfeed.');
+}
+
+function renderYoutube() {
+  const subs = state.meta.youtubeSubscriptions;
+  els.youtubePanel.hidden = !subs;
+  if (!subs) return;
+  fill(els.youtubeStatus,
+    youtubeCount(subs),
+    subs.error ? el('p', { className: 'muted', textContent: `The last check did not work: ${subs.error}` }) : null,
+    subs.checkedAt ? el('p', { className: 'muted', textContent: `Checked ${dayTime.format(new Date(subs.checkedAt))}.` }) : null);
 }
 
 function renderAddTopics() {
@@ -202,7 +230,7 @@ function backfillText(c) {
       return 'Backfill queued: it starts when the backfills before it finish';
     case 'running':
       if (d.pausedUntil) {
-        return `Backfill paused for the daily API quota: ${plural(visibleCount(c.counts, false), 'video')} stored so far, continues ${resumeTime.format(new Date(d.pausedUntil))}`;
+        return `Backfill paused for the daily API quota: ${plural(visibleCount(c.counts, false), 'video')} stored so far, continues ${dayTime.format(new Date(d.pausedUntil))}`;
       }
       return `Backfill running: ${plural(visibleCount(c.counts, false), 'video')} stored so far, ${plural(d.units, 'API unit')}`;
     case 'done':

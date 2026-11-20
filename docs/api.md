@@ -6,7 +6,7 @@ The routes the web pages use, and the checks every request passes.
 
 | Method and path | Purpose |
 | --- | --- |
-| `GET /api/meta` | Topics in order, each with its id, name and whether it is hidden, subscribed channels with video counts and backfill state, starred and queued video counts and latest upload times, the last visit per group, the rules, and API units used. |
+| `GET /api/meta` | Topics in order, each with its id, name and whether it is hidden, subscribed channels with video counts and backfill state, starred and queued video counts and latest upload times, the last visit per group, the rules, API units used, and `youtubeSubscriptions`: `{ newChannels, checkedAt, error }`, or null when [From YouTube](features.md#from-youtube) is off. |
 | `GET /api/videos?topic=&channel=&favoriteChannels=1&favorites=1&queued=1&shorts=&streams=&watched=&muted=&length=&sort=&q=&limit=&before=` | One page of videos, newest first, or by `sort`. Pass `nextCursor` from a page as `before` to get the next one. |
 | `GET /api/shelves?topic=&favoriteChannels=1&favorites=1&queued=1&shorts=&streams=&watched=&muted=&length=&perChannel=12&channels=20&after=` | The newest `perChannel` videos (1 to 50) of each subscribed channel, channels ordered by latest upload, `channels` shelves (1 to 100) per page. Each shelf names its channel by `channelId`; the channel itself is in `/api/meta`. Pass `nextCursor` from a page as `after` to get the next one. |
 | `PUT /api/visits/:group` | Body `{ "seenAt": "<ISO time>" }`. `:group` is `all`, `favorite-channels`, or `topic:<id>`. A `seenAt` later than the server's clock is stored as the server's time. |
@@ -24,7 +24,8 @@ The routes the web pages use, and the checks every request passes.
 | `POST /api/topics/:id/channels` | Body `{ "channels": ["<channelId>", …], "linked": true }` adds the topic to every listed channel; `"linked": false` removes it. Returns `{ changed }`, the number of channels that changed. Used by the Manage page. |
 | `GET /api/rules`, `POST /api/rules`, `DELETE /api/rules/:id` | Used by the Manage page. `POST` takes `kind` (`mute` or `route`), `pattern`, and `channel` and `topic`, each an id or null; a route rule needs both. |
 | `POST /api/import/preview` | Body `{ "csv": "<text of subscriptions.csv>" }`. The channels not in subfeed yet, with suggested topics and backfill unit estimates. See [Import subscriptions](features.md#import-subscriptions). |
-| `POST /api/import` | Body `{ "channels": [{ "id", "name", "handle", "avatar", "topics" }] }`. Adds the channels that are not in subfeed yet, stores their RSS videos, and queues their backfills. |
+| `POST /api/youtube-subscriptions/preview` | No body. The same answer as `POST /api/import/preview`, for the channels of the last [YouTube subscriptions](features.md#from-youtube) check. Answers 503 when the check is off and 409 before the first check. |
+| `POST /api/import` | Body `{ "channels": [{ "id", "name", "handle", "avatar", "topics", "subscribed" }] }`. Adds the channels that are not in subfeed yet, stores their RSS videos, and queues their backfills. `subscribed` is optional and `true` by default. A channel with `"subscribed": false` is stored unsubscribed, with no videos and no backfill. Answers `{ added, ignored, skipped, backfillsQueued }`: `ignored` counts the channels stored unsubscribed, and `skipped` those already in subfeed. |
 | `POST /api/refresh` | Refresh every feed now. |
 | `POST /mcp` | MCP over Streamable HTTP. See [MCP](mcp.md). |
 

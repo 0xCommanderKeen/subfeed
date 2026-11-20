@@ -101,7 +101,7 @@ test('import adds new channels with RSS videos, backfills one at a time, and a s
   const picked = preview.channels.map((c) => ({ ...c, topics: ['board-games'] }));
 
   const first = await s.json('POST', '/api/import', { channels: picked });
-  assert.deepEqual(first.body, { added: 3, skipped: 0, backfillsQueued: 3 });
+  assert.deepEqual(first.body, { added: 3, ignored: 0, skipped: 0, backfillsQueued: 3 });
   const listed = (await s.json('GET', '/api/channels')).body.channels;
   const imported = listed.filter((c) => c.id !== KNOWN);
   assert.deepEqual(imported.map((c) => [c.id, c.handle, c.topics, c.counts.long]), [id(1), id(2), id(3)].map((c) => [c, `@ch${c.slice(-3)}`, ['board-games'], 1]));
@@ -114,7 +114,7 @@ test('import adds new channels with RSS videos, backfills one at a time, and a s
   const again = await s.json('POST', '/api/import/preview', { csv });
   assert.deepEqual([again.body.channels.length, again.body.alreadyIn], [0, 4]);
   const second = await s.json('POST', '/api/import', { channels: picked });
-  assert.deepEqual(second.body, { added: 0, skipped: 3, backfillsQueued: 0 });
+  assert.deepEqual(second.body, { added: 0, ignored: 0, skipped: 3, backfillsQueued: 0 });
   assert.equal(s.db.listChannels().length, 4);
 });
 
@@ -156,7 +156,7 @@ test('without an API key, preview uses the CSV titles and import stores RSS vide
   assert.deepEqual(body.channels, [{ id: id(7), name: 'Weekend Woodworker', handle: null, avatar: null, videoCount: null, topics: ['woodworking'], backfillUnits: 0 }]);
   assert.equal(body.backfillAvailable, false);
   const done = await s.json('POST', '/api/import', { channels: body.channels });
-  assert.deepEqual(done.body, { added: 1, skipped: 0, backfillsQueued: 0 });
+  assert.deepEqual(done.body, { added: 1, ignored: 0, skipped: 0, backfillsQueued: 0 });
   assert.equal((await s.json('GET', '/api/channels')).body.channels.find((c) => c.id === id(7)).counts.long, 1);
 });
 

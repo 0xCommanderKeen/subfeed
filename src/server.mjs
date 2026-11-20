@@ -14,7 +14,7 @@ import { fetchChannelFeeds, videoUrl } from './feed.mjs';
 import { hotSince, hotStaleBefore, withVelocity } from './hot.mjs';
 import { allowedHosts, DEFAULT_HOST, guarded } from './http-guard.mjs';
 import { sendJson } from './http-io.mjs';
-import { EXAMPLES_PER_TOPIC, backfillUnits, claudeSuggester, keywordSuggestions, parseSubscriptionsCsv } from './import-subs.mjs';
+import { EXAMPLES_PER_TOPIC, backfillUnits, claudeSuggester, fetchSubscriptions, keywordSuggestions, parseSubscriptionsCsv } from './import-subs.mjs';
 import { INSTRUCTIONS, subfeedTools } from './mcp-tools.mjs';
 import { mcpHandler } from './mcp.mjs';
 import pkg from '../package.json' with { type: 'json' };
@@ -118,11 +118,12 @@ const sharedVideo = type('be a YouTube video link', (v) => {
 const importChannel = type('be a channel', (item, ctx) => {
   if (!item || typeof item !== 'object' || !CHANNEL_ID.test(item.id)) return undefined;
   const topics = topicIds.parse(item.topics ?? [], ctx);
-  if (!topics) return undefined;
+  const subscribed = item.subscribed ?? true;
+  if (!topics || typeof subscribed !== 'boolean') return undefined;
   const name = typeof item.name === 'string' ? item.name.trim().slice(0, MAX_IMPORT_NAME) : '';
   const handle = typeof item.handle === 'string' && /^@\S{1,100}$/.test(item.handle) ? item.handle : null;
   const avatar = typeof item.avatar === 'string' && item.avatar.startsWith('https://') ? item.avatar : null;
-  return { channel: { id: item.id, name: name || item.id, handle, avatar }, topics };
+  return { channel: { id: item.id, name: name || item.id, handle, avatar }, topics, subscribed };
 });
 
 const SHORTS = optional(oneOf(['include', 'exclude', 'only']), 'include');
@@ -179,8 +180,9 @@ function send(res, status, type, body) {
 
 // `hosts` is the set of Host values the server answers to. Without an API key, `fetchPage` loads YouTube channel and
 // watch pages, for avatars, adding a channel and shared videos. Without `suggestGroups`, imported channels get topics by keyword.
+// With `youtubeChannelId` and an API key, each refresh reads that channel's public subscriptions.
 export function createApp({
-  db, fetchFeeds, hosts, fetchPage, api = null, notify = null, suggestGroups = null,
+  db, fetchFeeds, hosts, fetchPage, api = null, notify = null, suggestGroups = null, youtubeChannelId = null,
   wait = (ms, signal) => sleep(ms, undefined, { signal }),
   // db.searchPage, or the same run elsewhere such as searchWorker; it may return a promise and take an AbortSignal.
   search = (query) => db.searchPage(query),
@@ -198,6 +200,9 @@ export function createApp({
   let lastRefreshUnits = null;
   // Concurrent triggers share one run instead of each fetching every feed.
   let pendingRefresh = null;
+  const youtubeSubsOn = Boolean(youtubeChannelId && apiMeter);
+  // { checkedAt, listed: [{ id, title }], error } after the first check. A failed check keeps the last list.
+  let youtubeSubs = null;
 
   // The database is the source of truth. Reading it per request keeps every view current with no cache to invalidate.
   function catalog() {
@@ -259,10 +264,25 @@ export function createApp({
     lastRefreshUnits =
       (await lookupStep('video details', 'videos', (api) => api && fillMissingDetails({ db, api, maxCalls: DETAIL_CALLS_PER_REFRESH }))) +
       (await lookupStep('view counts', 'videos', (api) => api && refreshViewCounts({ db, api, maxCalls: STATS_CALLS_PER_REFRESH }))) +
-      (await lookupStep('channel avatars', 'channels', (api) => fillMissingAvatars({ db, api, fetchImpl: fetchPage })));
+      (await lookupStep('channel avatars', 'channels', (api) => fillMissingAvatars({ db, api, fetchImpl: fetchPage }))) +
+      (youtubeSubsOn ? await lookupStep('YouTube subscriptions', 'channels not in subfeed', checkYoutubeSubs) : 0);
     lastRefresh = now().toISOString();
     await announce();
   }
+
+  async function checkYoutubeSubs(api) {
+    const checkedAt = now().toISOString();
+    try {
+      youtubeSubs = { checkedAt, listed: await fetchSubscriptions(api, youtubeChannelId), error: null };
+      return newOnYoutube(catalog().byId).length;
+    } catch (err) {
+      youtubeSubs = { checkedAt, listed: youtubeSubs?.listed ?? [], error: err.message };
+      throw err;
+    }
+  }
+
+  // Derived on read, so a channel added or imported since the check stops counting at once.
+  const newOnYoutube = (byId) => (youtubeSubs?.listed ?? []).filter((c) => !byId.has(c.id));
 
   function refresh() {
     pendingRefresh ??= runRefresh().finally(() => {
@@ -273,7 +293,7 @@ export function createApp({
 
   function meta() {
     const stats = db.channelStats();
-    const { topics, channels } = catalog();
+    const { topics, channels, byId } = catalog();
     const subscribed = channels
       .filter((c) => c.subscribed)
       .map(({ id, name, handle, avatar, topics, favorite }) => ({
@@ -298,6 +318,7 @@ export function createApp({
       totalVideos,
       hot: hasFreshCounts(now().toISOString()),
       apiUnits: { lastRefresh: lastRefreshUnits, today: unitsToday(db) },
+      youtubeSubscriptions: youtubeSubsOn ? { newChannels: newOnYoutube(byId).length, checkedAt: youtubeSubs?.checkedAt ?? null, error: youtubeSubs?.error ?? null } : null,
     };
   }
 
@@ -444,7 +465,6 @@ export function createApp({
     }));
   }
 
-  // subscriptions.csv -> the channels not in subfeed yet, each with suggested topics and its backfill's unit estimate.
   async function previewImport({ csv }) {
     let listed;
     try {
@@ -452,6 +472,18 @@ export function createApp({
     } catch (err) {
       throw new HttpError(400, err.message);
     }
+    return previewChannels(listed);
+  }
+
+  function previewYoutubeSubs() {
+    if (!youtubeSubsOn) throw new HttpError(503, 'YOUTUBE_CHANNEL_ID and YOUTUBE_API_KEY are not both set; see the README');
+    if (!youtubeSubs) throw new HttpError(409, 'subfeed has not checked your YouTube subscriptions yet; refresh first');
+    return previewChannels(youtubeSubs.listed);
+  }
+
+  // Subscriptions [{ id, title }] -> the channels not in subfeed yet, each with suggested topics and its backfill's
+  // unit estimate.
+  async function previewChannels(listed) {
     const cat = catalog();
     const fresh = listed.filter((c) => !cat.byId.has(c.id));
     let found = null;
@@ -463,7 +495,7 @@ export function createApp({
         throw new HttpError(502, `Could not look the channels up on YouTube: ${err.message}`);
       }
     }
-    // Without a key there is no lookup: the CSV's title is all there is, and every channel is kept.
+    // Without a key there is no lookup: the listed title is all there is, and every channel is kept.
     const channels = fresh
       .filter((c) => !found || found.has(c.id))
       .map((c) => ({ id: c.id, name: c.title, handle: null, avatar: null, description: '', videoCount: null, ...found?.get(c.id) }));
@@ -496,19 +528,23 @@ export function createApp({
     };
   }
 
-  // Adds the channels that are not in subfeed yet, stores their RSS videos, and queues one backfill each.
+  // Adds the channels that are not in subfeed yet, stores their RSS videos, and queues one backfill each. A channel
+  // with `subscribed: false` is stored unsubscribed, with no videos, so it is not offered again.
   // Channels already in subfeed are skipped, so importing the same file twice adds nothing.
   async function importChannels({ channels: items }) {
     const { byId } = catalog();
+    const stored = new Set();
     const added = [];
-    for (const { channel, topics } of items) {
-      if (byId.has(channel.id) || added.some((c) => c.id === channel.id)) continue;
+    for (const { channel, topics, subscribed } of items) {
+      if (byId.has(channel.id) || stored.has(channel.id)) continue;
+      stored.add(channel.id);
       db.subscribeChannel(channel, topics);
-      added.push(channel);
+      if (subscribed) added.push(channel);
+      else db.updateChannel(channel.id, { subscribed: false });
     }
     await refreshFeeds(db, added.map((c) => c.id), { fetchFeeds, onChannel: recordStatus });
     for (const channel of added) backfills.start(channel);
-    return { added: added.length, skipped: items.length - added.length, backfillsQueued: apiMeter ? added.length : 0 };
+    return { added: added.length, ignored: stored.size - added.length, skipped: items.length - stored.size, backfillsQueued: apiMeter ? added.length : 0 };
   }
 
   // A video shared from another app goes to the end of Watch Later. A video subfeed has not stored yet is looked up,
@@ -627,8 +663,9 @@ export function createApp({
       handler: subscribeChannelRequest,
     },
     { method: 'POST', path: '/api/import/preview', body: { csv: anyString('the text of subscriptions.csv') }, handler: previewImport },
+    { method: 'POST', path: '/api/youtube-subscriptions/preview', handler: () => previewYoutubeSubs() },
     {
-      method: 'POST', path: '/api/import', body: { channels: arrayOf(importChannel, 'channels, each with a channel id and existing topic ids') },
+      method: 'POST', path: '/api/import', body: { channels: arrayOf(importChannel, 'channels, each with a channel id, existing topic ids and an optional subscribed flag') },
       handler: importChannels,
     },
     {
@@ -720,6 +757,9 @@ function main() {
   const db = openSeededDb(dbPath);
   const searcher = searchWorker(dbPath);
   const apiKey = process.env.YOUTUBE_API_KEY || null;
+  const youtubeChannelId = process.env.YOUTUBE_CHANNEL_ID || null;
+  if (youtubeChannelId && !CHANNEL_ID.test(youtubeChannelId)) console.error(`YOUTUBE_CHANNEL_ID ${youtubeChannelId} is not a channel id (UC and 22 more characters); YouTube subscriptions are not checked`);
+  else if (youtubeChannelId && !apiKey) console.error('YOUTUBE_CHANNEL_ID needs YOUTUBE_API_KEY; YouTube subscriptions are not checked');
   const notify = process.env.NTFY_URL ? ntfySender({ topicUrl: process.env.NTFY_URL, token: process.env.NTFY_TOKEN || null }) : null;
   // Filled once the server listens, so PORT=0 allows the port it was given. No request arrives before then.
   const hosts = new Set();
@@ -731,6 +771,7 @@ function main() {
     api: apiKey ? fetchApi(apiKey) : null,
     notify,
     suggestGroups: process.env.ANTHROPIC_API_KEY ? claudeSuggester(process.env.ANTHROPIC_API_KEY) : null,
+    youtubeChannelId: CHANNEL_ID.test(youtubeChannelId) ? youtubeChannelId : null,
     search: searcher.search,
   });
   const logRefresh = () => app.refresh().catch((err) => console.error(`refresh failed: ${err.message}`));

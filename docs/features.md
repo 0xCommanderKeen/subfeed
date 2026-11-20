@@ -192,6 +192,12 @@ Below the list, the page shows the estimated API units for the backfills of the 
 
 Each imported channel gets its RSS videos right away, and a backfill in the queue when a YouTube API key is set. Backfills run one at a time. See [Load full history (backfill)](youtube-api.md#load-full-history-backfill). Channels that are already in subfeed, subscribed or not, are never imported again, so importing the same file twice adds nothing.
 
+### From YouTube
+
+subfeed can also read your subscriptions from YouTube itself, so a channel you subscribe to there shows up on the Manage page without a new export. It only adds: a channel you unsubscribe from on YouTube stays in subfeed. To turn it on, follow [Connect your YouTube subscriptions](../README.md#connect-your-youtube-subscriptions) in the README.
+
+Every refresh, at start and every 30 minutes, reads the list with `subscriptions.list`: 1 API unit per 50 subscriptions. The Manage page then has a From YouTube panel that says how many channels you subscribe to on YouTube are not in subfeed, and the Manage item in the sidebar has a dot while there are any. Click Review for the same review as a file import. The ticked channels are added like imported ones. The unticked channels go to Unsubscribed, with no videos, so they are not offered again; Resubscribe there adds one later. When the check fails, for example because the subscriptions are private, the panel shows why and keeps the list from the last check.
+
 ## Install on a phone
 
 subfeed is an installable web app. In Chrome on Android, open subfeed at its https address and choose **Install app** (or **Add to Home screen**) from the menu. The installed app opens full screen, without the browser bar. Installing needs https, so a plain http address on the LAN does not offer it. A reverse proxy with a certificate, such as Tailscale Serve or Caddy, gives one.

@@ -51,6 +51,8 @@ Upcoming and live videos have no length yet, so each refresh looks them up again
 
 Upcoming and live videos count as streams, which **Hide streams** leaves out. See [Groups and views](features.md#groups-and-views). Once a stream or premiere has ended, it counts as a regular video: the API does not tell an aired premiere from a stream replay, so hiding replays would hide aired premieres for good. A Short counts as a Short whatever its kind. A video whose kind is not known yet counts as a regular video.
 
+With `YOUTUBE_CHANNEL_ID` set, each refresh also reads your public subscriptions with `subscriptions.list`, 50 channels per call, so 1 unit per 50 subscriptions. See [From YouTube](features.md#from-youtube).
+
 Every API call costs 1 unit. The server counts the units of every call it makes, and `bin/backfill.mjs` counts its calls too. Both add them to `api_units` per Pacific day, because the quota resets at midnight Pacific time. `GET /api/meta` reports `apiUnits: { lastRefresh, today }`: the units the last refresh used, and the total for the current quota day.
 
 If the quota runs out anyway, for example because another program uses the same key, a refresh logs the failed duration lookup and keeps the videos it already filled. The next refresh after midnight Pacific fills the rest.

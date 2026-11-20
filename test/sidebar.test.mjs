@@ -65,7 +65,7 @@ function mount() {
   const nav = new FakeNode('aside');
   const sidebar = mountNav({ nav, opener: new FakeNode('button'), backdrop: new FakeNode('div'), onFilterChange() {}, onRefresh() {} });
   const lists = nav.children.find((c) => c.className === 'nav-scroll');
-  return { sidebar, lists };
+  return { sidebar, lists, nav };
 }
 
 // Headings as `# Label`, groups and the More fold by their data-group, in document order.
@@ -89,4 +89,15 @@ test('a re-render of the sidebar gives focus back to the group that had it', () 
   sidebar.render({ groups: buildGroups(meta), meta, current: 'all' });
   assert.notEqual(document.activeElement, before);
   assert.equal(document.activeElement.dataset.group, 'watch-later');
+});
+
+test('the Manage item has a dot while channels you subscribe to on YouTube are not in subfeed', () => {
+  const { sidebar, nav } = mount();
+  const manageDot = (youtubeSubscriptions) => {
+    sidebar.render({ groups: buildGroups(meta), meta: { ...meta, youtubeSubscriptions }, current: 'all' });
+    return nav.querySelector('.newdot') !== null;
+  };
+  assert.equal(manageDot(null), false);
+  assert.equal(manageDot({ newChannels: 0, checkedAt: null, error: null }), false);
+  assert.equal(manageDot({ newChannels: 2, checkedAt: '2026-11-17T12:00:00.000Z', error: null }), true);
 });

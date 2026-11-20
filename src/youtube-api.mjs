@@ -21,7 +21,7 @@ export function fetchApi(key, fetchImpl = fetch) {
   };
 }
 
-// Every Data API call this project makes (channels, playlistItems, videos .list) costs 1 quota unit,
+// Every Data API call this project makes (channels, playlistItems, subscriptions, videos .list) costs 1 quota unit,
 // whatever parts it asks for. `onCall()` runs once per call, for example to record daily usage.
 export function meteredApi(api, { onCall = () => {} } = {}) {
   const meter = {

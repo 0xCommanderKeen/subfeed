@@ -3,8 +3,17 @@ import { plural, whole } from './vocab.js';
 
 const DAILY_QUOTA = 10_000;
 
+// Where a review's channels come from. A YouTube review stores the unticked channels unsubscribed, as the check would
+// offer them again otherwise.
+const SOURCES = {
+  csv: { reading: 'Reading the file and suggesting topics…', where: 'in the file', none: 'Every channel in the file is already in subfeed.', verb: 'Import', busyLabel: 'Importing…', doneVerb: 'Imported', ignoreUnticked: false },
+  youtube: { reading: 'Looking the channels up and suggesting topics…', where: 'on YouTube', none: 'Every channel you subscribe to on YouTube is in subfeed.', verb: 'Add', busyLabel: 'Adding…', doneVerb: 'Added', ignoreUnticked: true },
+};
+
 // `topics()` returns the current topic list; `onChange()` reloads the rest of the page after topics or channels change.
-export function mountImport({ fileInput, fileName, root, topics, onChange }) {
+// `open(fetchPreview)` starts a review of the preview it resolves to.
+export function mountImport({ root, source, topics, onChange }) {
+  const { reading, where, none, verb, busyLabel, doneVerb, ignoreUnticked } = SOURCES[source];
   // null | { phase: 'reading' } | { phase: 'error', message } | { phase: 'review' | 'importing', preview, picks } |
   // { phase: 'done', result }. `picks` maps channel id -> Set of topic ids, for the ticked channels only.
   let state = null;
@@ -14,19 +23,15 @@ export function mountImport({ fileInput, fileName, root, topics, onChange }) {
     render();
   }
 
-  fileInput.addEventListener('change', async () => {
-    const file = fileInput.files[0];
-    if (!file) return;
-    fileName.textContent = file.name;
+  async function open(fetchPreview) {
     set({ phase: 'reading' });
     try {
-      const preview = await api('POST', '/api/import/preview', { csv: await file.text() });
+      const preview = await fetchPreview();
       set({ phase: 'review', preview, picks: new Map(preview.channels.map((c) => [c.id, new Set(c.topics)])) });
     } catch (err) {
       set({ phase: 'error', message: err.message });
     }
-    fileInput.value = '';
-  });
+  }
 
   const toggleChannel = (id, on) => {
     const channel = state.preview.channels.find((c) => c.id === id);
@@ -60,8 +65,10 @@ export function mountImport({ fileInput, fileName, root, topics, onChange }) {
 
   async function runImport() {
     const channels = state.preview.channels
-      .filter((c) => state.picks.has(c.id))
-      .map(({ id, name, handle, avatar }) => ({ id, name, handle, avatar, topics: [...state.picks.get(id)] }));
+      .filter((c) => ignoreUnticked || state.picks.has(c.id))
+      .map(({ id, name, handle, avatar }) => (state.picks.has(id)
+        ? { id, name, handle, avatar, topics: [...state.picks.get(id)] }
+        : { id, name, handle, avatar, topics: [], subscribed: false }));
     set({ ...state, phase: 'importing' });
     try {
       set({ phase: 'done', result: await api('POST', '/api/import', { channels }) });
@@ -72,7 +79,7 @@ export function mountImport({ fileInput, fileName, root, topics, onChange }) {
   }
 
   function summary(preview) {
-    const parts = [`${plural(preview.listed, 'channel')} in the file`, `${whole.format(preview.alreadyIn)} already in subfeed`];
+    const parts = [`${plural(preview.listed, 'channel')} ${where}`, `${whole.format(preview.alreadyIn)} already in subfeed`];
     if (preview.notFound) parts.push(`${whole.format(preview.notFound)} no longer on YouTube`);
     if (preview.lookupUnits) parts.push(`${plural(preview.lookupUnits, 'API unit')} for the lookup`);
     const by = preview.suggestedBy === 'claude' ? 'Topics suggested by Claude.' : 'Topics suggested by keyword match.';
@@ -82,7 +89,7 @@ export function mountImport({ fileInput, fileName, root, topics, onChange }) {
 
   function channelRow(c) {
     const ticked = state.picks.has(c.id);
-    const box = el('input', { type: 'checkbox', checked: ticked, ariaLabel: `Import ${c.name}` });
+    const box = el('input', { type: 'checkbox', checked: ticked, ariaLabel: `${verb} ${c.name}` });
     box.addEventListener('change', () => toggleChannel(c.id, box.checked));
     const picked = state.picks.get(c.id) ?? new Set();
     const info = [c.handle, c.videoCount === null ? null : plural(c.videoCount, 'video'), c.backfillUnits ? `backfill about ${plural(c.backfillUnits, 'unit')}` : null];
@@ -91,10 +98,13 @@ export function mountImport({ fileInput, fileName, root, topics, onChange }) {
       ticked ? el('div', { className: 'pick import-topics' }, ...topicPicker(topics(), picked, (topicId) => toggleTopic(c.id, topicId))) : null);
   }
 
+  // With nothing ticked, a YouTube review still has something to do: send every channel to Unsubscribed.
+  const actionLabel = (ticked, total) => (ticked || !ignoreUnticked ? `${verb} ${plural(ticked, 'channel')}` : `Move ${plural(total, 'channel')} to Unsubscribed`);
+
   function review() {
     const { preview, picks } = state;
     const busy = state.phase === 'importing';
-    if (!preview.channels.length) return [summary(preview), el('p', { textContent: 'Every channel in the file is already in subfeed.' })];
+    if (!preview.channels.length) return [summary(preview), el('p', { textContent: none })];
     const chosen = preview.channels.filter((c) => picks.has(c.id));
     const units = chosen.reduce((n, c) => n + c.backfillUnits, 0);
     const estimate = preview.backfillAvailable
@@ -117,15 +127,17 @@ export function mountImport({ fileInput, fileName, root, topics, onChange }) {
         el('button', { type: 'button', className: 'btn', textContent: 'Untick all', onclick: () => all(false) })),
       el('ul', { className: 'rows import-list' }, ...preview.channels.map(channelRow)),
       el('p', { className: 'muted import-estimate', textContent: estimate }),
+      ignoreUnticked ? el('p', { className: 'muted', textContent: 'Unticked channels go to Unsubscribed, so they are not offered again.' }) : null,
       state.message ? el('p', { className: 'error', textContent: state.message }) : null,
       el('div', { className: 'pick' },
-        el('button', { type: 'button', className: 'btn primary', disabled: busy || !chosen.length, textContent: busy ? 'Importing…' : `Import ${plural(chosen.length, 'channel')}`, onclick: runImport }),
+        el('button', { type: 'button', className: 'btn primary', disabled: busy || !(chosen.length || ignoreUnticked), textContent: busy ? busyLabel : actionLabel(chosen.length, preview.channels.length), onclick: runImport }),
         el('button', { type: 'button', className: 'btn', disabled: busy, textContent: 'Cancel', onclick: () => set(null) })),
     ];
   }
 
-  function done({ added, skipped, backfillsQueued }) {
-    const lines = [`Imported ${plural(added, 'channel')} with their latest videos.`];
+  function done({ added, ignored, skipped, backfillsQueued }) {
+    const lines = [`${doneVerb} ${plural(added, 'channel')} with their latest videos.`];
+    if (ignored) lines.push(`${plural(ignored, 'channel')} went to Unsubscribed.`);
     if (skipped) lines.push(`${plural(skipped, 'channel')} were already in subfeed.`);
     if (backfillsQueued) lines.push(`${plural(backfillsQueued, 'backfill')} queued; they run one at a time, as the list below shows.`);
     return [el('div', { className: 'result' }, ...lines.map((textContent) => el('p', { textContent })))];
@@ -135,7 +147,7 @@ export function mountImport({ fileInput, fileName, root, topics, onChange }) {
     if (!state) return fill(root);
     switch (state.phase) {
       case 'reading':
-        return fill(root, el('p', { className: 'muted', textContent: 'Reading the file and suggesting topics…' }));
+        return fill(root, el('p', { className: 'muted', textContent: reading }));
       case 'error':
         return fill(root, el('p', { className: 'error', textContent: state.message }));
       case 'done':
@@ -147,6 +159,7 @@ export function mountImport({ fileInput, fileName, root, topics, onChange }) {
 
   // Topics can change elsewhere on the page; drop picks of deleted ones.
   return {
+    open,
     render: () => {
       if (state?.picks) {
         const known = new Set(topics().map((t) => t.id));

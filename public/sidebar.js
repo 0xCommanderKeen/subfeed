@@ -2,7 +2,7 @@ import { el, fill, icon, prefs } from './dom.js';
 import { FILTERS } from './filters.js';
 import { groupHasNew, groupSize } from './groups.js';
 import { isTyping } from './shortcuts.js';
-import { compact, whole } from './vocab.js';
+import { compact, plural, whole } from './vocab.js';
 
 // Below this width the sidebar is a drawer opened from the top bar's menu button.
 const DESKTOP = matchMedia('(min-width: 900px)');
@@ -27,8 +27,9 @@ export function mountNav({ nav, opener, backdrop, managing = false, onPick = nul
   const units = el('small');
   const refresh = el('button', { type: 'button', className: 'nav-item', title: 'Refresh feeds', onclick: onRefresh },
     el('span', { className: 'nav-tile' }, icon('refresh')), el('span', { className: 'nav-name nav-stack' }, el('span', { textContent: 'Refresh' }), units), refreshAt);
-  const manage = el('a', { className: 'nav-item', href: 'manage.html', title: 'Manage channels and topics', ariaCurrent: managing ? 'page' : null },
-    el('span', { className: 'nav-tile' }, icon('sliders')), el('span', { className: 'nav-name', textContent: 'Manage' }));
+  const manageTile = el('span', { className: 'nav-tile' });
+  const manage = el('a', { className: 'nav-item', href: 'manage.html', ariaCurrent: managing ? 'page' : null },
+    manageTile, el('span', { className: 'nav-name', textContent: 'Manage' }));
   const compactToggle = el('button', { type: 'button', className: 'nav-item nav-toggle', onclick: () => setCompact(!root.classList.contains('nav-compact')) },
     el('span', { className: 'nav-tile' }, icon('rail')), el('span', { className: 'nav-name', textContent: 'Compact' }), el('kbd', { textContent: '[' }));
   fill(nav,
@@ -132,8 +133,11 @@ export function mountNav({ nav, opener, backdrop, managing = false, onPick = nul
       fill(lists, list(groups.filter((g) => g.id === 'all')),
         label('Library'), list(groups.filter((g) => g.library)),
         label('Groups'), list(topics.filter((g) => !g.hidden)), more(topics.filter((g) => g.hidden), { meta, current }));
-      // The closed drawer hides the groups' dots, so the menu button carries one for them.
-      opener.classList.toggle('has-new', lists.querySelector('.newdot') !== null);
+      const newOnYoutube = meta.youtubeSubscriptions?.newChannels ?? 0;
+      fill(manageTile, icon('sliders'), newOnYoutube ? el('span', { className: 'newdot' }) : null);
+      manage.title = newOnYoutube ? `Manage channels and topics: ${plural(newOnYoutube, 'channel')} you subscribe to on YouTube to review` : 'Manage channels and topics';
+      // The closed drawer hides the dots, so the menu button carries one for them.
+      opener.classList.toggle('has-new', lists.querySelector('.newdot') !== null || newOnYoutube > 0);
       if (focused) lists.querySelector(`[data-group="${CSS.escape(focused)}"]`)?.focus();
       refreshAt.textContent = meta.lastRefresh ? clock.format(new Date(meta.lastRefresh)) : '';
       units.textContent = `${whole.format(meta.apiUnits.today)} API units today`;

@@ -1,6 +1,6 @@
 import { CHANNEL_ID, fold, wordsOf } from '../public/vocab.js';
 import { PLAYLIST_KINDS } from './feed.mjs';
-import { MAX_PER_CALL } from './youtube-api.mjs';
+import { ApiError, MAX_PER_CALL } from './youtube-api.mjs';
 
 const MIN_NEW_GROUP = 3;
 export const CLAUDE_MODEL = 'claude-opus-5-5';
@@ -56,6 +56,36 @@ export function parseSubscriptionsCsv(text) {
     seen.add(id);
     channels.push({ id, title: row[titleAt]?.trim() || id });
   }
+  return channels;
+}
+
+const SUBSCRIPTION_ERRORS = new Map([
+  ['subscriptionForbidden', () => 'Your YouTube subscriptions are private. To share them with subfeed, open YouTube settings, then Privacy, and turn off "Keep all my subscriptions private".'],
+  ['subscriberNotFound', (channelId) => `YouTube has no channel ${channelId}. Check YOUTUBE_CHANNEL_ID.`],
+]);
+
+// The public subscriptions of `channelId`, as parseSubscriptionsCsv lists them: one subscriptions.list call (1 unit)
+// per 50 channels.
+export async function fetchSubscriptions(api, channelId) {
+  const seen = new Set();
+  const channels = [];
+  let pageToken = null;
+  do {
+    let body;
+    try {
+      body = await api('subscriptions', { part: 'snippet', channelId, maxResults: String(MAX_PER_CALL), ...(pageToken && { pageToken }) });
+    } catch (err) {
+      const friendly = err instanceof ApiError && SUBSCRIPTION_ERRORS.get(err.reason);
+      throw friendly ? new Error(friendly(channelId)) : err;
+    }
+    for (const { snippet = {} } of body.items ?? []) {
+      const id = snippet.resourceId?.channelId;
+      if (!CHANNEL_ID.test(id) || seen.has(id)) continue;
+      seen.add(id);
+      channels.push({ id, title: snippet.title || id });
+    }
+    pageToken = body.nextPageToken ?? null;
+  } while (pageToken);
   return channels;
 }
 

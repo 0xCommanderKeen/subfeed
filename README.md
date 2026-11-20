@@ -20,9 +20,28 @@ Open http://localhost:4173. The first start creates an empty database in `data/s
 
 - Add channels on the Manage page.
 - Import your YouTube subscriptions from Google Takeout. See [Import subscriptions](docs/features.md#import-subscriptions).
+- Connect your YouTube subscriptions, so subfeed offers every channel you follow there. See [Connect your YouTube subscriptions](#connect-your-youtube-subscriptions).
 - Before the first start, copy `channels.example.json` to `channels.json` and edit it. A new database imports that file once.
 
 Run the tests with `npm test`.
+
+## Connect your YouTube subscriptions
+
+subfeed can read the channels you subscribe to on YouTube and offer the ones it does not have yet. It needs no Google sign-in: it reads your subscriptions through the YouTube Data API, which only works when they are public. It only reads. Nothing in subfeed changes your YouTube account, and a channel you unsubscribe from on YouTube stays in subfeed.
+
+1. Get a YouTube Data API key and put it in `.env` as `YOUTUBE_API_KEY=<key>`. See [YouTube Data API](docs/youtube-api.md).
+2. Make your subscriptions public. On YouTube, open **Settings**, then **Privacy**, and turn off **Keep all my subscriptions private**. Anyone who opens your channel page can then see whom you subscribe to.
+3. Find your channel id on [youtube.com/account_advanced](https://www.youtube.com/account_advanced). It starts with `UC`.
+4. Add it to `.env` and restart the server:
+
+   ```sh
+   YOUTUBE_CHANNEL_ID=UCxxxxxxxxxxxxxxxxxxxxxx
+   ```
+
+   With [Docker](#docker), you can set it in the compose file's `environment:` block instead, since it is not a secret.
+5. Open the Manage page. The **From YouTube** panel appears after the first refresh, which runs at start. It says how many channels you subscribe to on YouTube are not in subfeed, and the Manage item in the sidebar has a dot while there are any. Click **Review**, pick topics, and add the channels you want.
+
+Unticked channels go to Unsubscribed, so they are not offered again. A channel you unsubscribe from in subfeed is not offered again either. A channel you delete is offered again while you still subscribe to it on YouTube. Each refresh, every 30 minutes, spends 1 API unit per 50 subscriptions. If the panel reports an error, the message says what to fix, for example private subscriptions or a wrong channel id. See [From YouTube](docs/features.md#from-youtube) for details.
 
 ## Set up with an agent
 
@@ -55,6 +74,7 @@ To change subfeed's code, read [AGENTS.md](AGENTS.md) first.
 - Hides videos by title words with mute and route rules. See [Rules](docs/features.md#rules).
 - Sends an [ntfy](https://ntfy.sh) notification when a favorite channel uploads. See [Notifications](docs/features.md#notifications).
 - With a YouTube Data API key, loads each channel's full upload history, video lengths, and a Hot sort by views per hour. See [YouTube Data API](docs/youtube-api.md).
+- Offers the channels you subscribe to on YouTube that it does not have yet. See [Connect your YouTube subscriptions](#connect-your-youtube-subscriptions).
 - Installs as a web app on a phone, and takes video links from the share sheet. See [Install on a phone](docs/features.md#install-on-a-phone).
 - Answers MCP at `/mcp`, so Claude can read and change your subscriptions. See [MCP](docs/mcp.md).
 - Writes a daily snapshot of the database. See [Backups](docs/database.md#backups).
@@ -69,6 +89,7 @@ The server reads its settings from the environment. At start, the server, `bin/b
 | `HOST` | `127.0.0.1` | The address the server binds. The default accepts connections from this machine only. `0.0.0.0` accepts them from the network. |
 | `SUBFEED_DB` | `data/subfeed.db` | The database file. The server, `bin/add-channel.mjs`, `bin/backfill.mjs` and `bin/export-channels.mjs` read it. The server writes its backups to a `backups` folder next to the file. |
 | `YOUTUBE_API_KEY` | none | A YouTube Data API v3 key. It turns on video lengths and kinds, the Hot sort, backfills, and lookups by API instead of channel pages. The server, `bin/backfill.mjs` and `bin/add-channel.mjs` read it. See [YouTube Data API](docs/youtube-api.md). |
+| `YOUTUBE_CHANNEL_ID` | none | Your own YouTube channel id, `UC` and 22 more characters. With it and `YOUTUBE_API_KEY`, every refresh reads your public subscriptions and the Manage page offers the channels that are not in subfeed yet. An id in another form is logged at start and ignored. See [From YouTube](docs/features.md#from-youtube). |
 | `NTFY_URL` | none | The ntfy topic URL for upload notifications and backup alerts. Without it, notifications are off. |
 | `NTFY_TOKEN` | none | The access token for the ntfy topic, if the topic needs one. |
 | `ANTHROPIC_API_KEY` | none | An Anthropic API key. With it, Claude suggests topics when you import subscriptions. Without it, subfeed matches topic names against each channel's title and description. |
