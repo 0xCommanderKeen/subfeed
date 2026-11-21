@@ -48,7 +48,7 @@ beforeEach(() => (observers = []));
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 const button = (sentinel) => sentinel.children.find((c) => c.tag === 'button');
 
-function setup({ pages, current = () => true }) {
+function setup({ pages, current = () => true, placeholder }) {
   const sentinel = new FakeNode('div');
   const cursors = [];
   const shown = [];
@@ -66,6 +66,7 @@ function setup({ pages, current = () => true }) {
       sentinel.more = more;
     },
     failure: (err) => `Could not load: ${err.message}`,
+    ...(placeholder && { placeholder }),
   });
   return { sentinel, cursors, shown, observer: observers[0] };
 }
@@ -81,6 +82,18 @@ test('loads the first page at once and follows each cursor while the sentinel st
   assert.deepEqual(cursors, [null, 'c1']);
   assert.deepEqual(shown, [1, 2, 3]);
   assert.ok(!observer.observed.has(sentinel), 'stops watching after the last page');
+});
+
+test('the placeholder knows the first page from the next ones, and a failed first page is still the first', async () => {
+  const placeholder = (first) => (first ? 'skeleton' : 'dots');
+  const { sentinel, observer } = setup({ pages: [new Error('offline'), { items: [1], nextCursor: 'c1' }, { items: [2], nextCursor: null }], placeholder });
+  assert.equal(sentinel.text, 'skeleton');
+  await settle();
+  button(sentinel).onclick();
+  assert.equal(sentinel.text, 'skeleton');
+  await settle();
+  observer.callback([{ isIntersecting: true }]);
+  assert.equal(sentinel.text, 'dots');
 });
 
 test('a second trigger while a page loads does not fetch it twice', async () => {

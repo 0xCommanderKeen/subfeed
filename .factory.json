@@ -3,5 +3,5 @@
   "maxJobs": 3,
   "merge": "triage",
   "protect": ["Dockerfile", ".dockerignore", "package.json", "src/http-guard.mjs", "src/http-io.mjs", "src/mcp.mjs", "src/schema.mjs", "src/backup.mjs"],
-  "mergeLines": 400
+  "mergeLines": 5000
 }

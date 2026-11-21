@@ -190,10 +190,10 @@ export function createApp({
   if (!fetchPage) throw new Error('createApp needs fetchPage: pass fetch, or a fake in tests so none reaches youtube.com');
   const { now } = db;
   const apiMeter = api && dbMeter(db, api);
-  // channelId -> { ok, error?, failedRuns, lastFetched }; absent until the channel's first fetch finishes. failedRuns
-  // counts the fetches in a row that failed: one slow refresh, such as the first after a restart, often times out a few.
+  // channelId -> { ok, error?, failingSince, lastFetched }; absent until the channel's first fetch finishes.
+  // failingSince is when the fetches that failed in a row began, and null after one that worked.
   const channelStatus = new Map();
-  const fetchStatus = (id) => channelStatus.get(id) ?? { ok: null, failedRuns: 0, lastFetched: null };
+  const fetchStatus = (id) => channelStatus.get(id) ?? { ok: null, failingSince: null, lastFetched: null };
   const backfills = backfillQueue({ db, apiMeter, wait });
   let lastRefresh = null;
   // Data API units the last refresh spent on video details; null before the first refresh.
@@ -214,8 +214,8 @@ export function createApp({
   function recordStatus(id, error) {
     const previous = channelStatus.get(id);
     channelStatus.set(id, error
-      ? { ok: false, error, failedRuns: (previous?.failedRuns ?? 0) + 1, lastFetched: previous?.lastFetched ?? null }
-      : { ok: true, failedRuns: 0, lastFetched: now().toISOString() });
+      ? { ok: false, error, failingSince: previous?.failingSince ?? now().toISOString(), lastFetched: previous?.lastFetched ?? null }
+      : { ok: true, failingSince: null, lastFetched: now().toISOString() });
   }
 
   // Refreshing one channel (added or resubscribed) never notifies: only the refresh of every channel does.

@@ -25,6 +25,7 @@ export const SHELL = [
   'shell.js',
   'shortcuts.js',
   'sidebar.js',
+  'skeleton.js',
   'sortable.js',
   'vocab.js',
   'favicon.svg',

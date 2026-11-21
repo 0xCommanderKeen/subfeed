@@ -27,6 +27,30 @@ test('refresh fetches at most `concurrency` channels at once, reaches every chan
   assert.deepEqual(uploads.sort(), ids.slice(0, 20).map((id) => video(id, 2).id).sort());
 });
 
+test('refresh never writes while a fetch is in flight, so a slow write cannot time out a feed that already answered', async () => {
+  const db = openDb(':memory:');
+  for (const id of ids) db.subscribeChannel({ id, name: id }, []);
+  let inFlight = 0;
+  const writesDuringFetch = [];
+  const watched = {
+    ...db,
+    upsertVideos: (videos, opts) => {
+      if (inFlight) writesDuringFetch.push(videos[0].channelId);
+      return db.upsertVideos(videos, opts);
+    },
+  };
+  const fetchFeeds = async (id) => {
+    inFlight++;
+    await new Promise((r) => setTimeout(r, Number(id.at(-1)) % 4));
+    inFlight--;
+    return { videos: [video(id, 1)], error: null };
+  };
+  const stored = [];
+  await refreshFeeds(watched, ids, { fetchFeeds, onChannel: (id) => stored.push(id), concurrency: 5 });
+  assert.deepEqual(writesDuringFetch, []);
+  assert.deepEqual([...stored].sort(), [...ids].sort());
+});
+
 test('a channel whose write throws is reported, and the refresh still stores and returns every other channel', async () => {
   const db = openDb(':memory:');
   for (const id of ids) db.subscribeChannel({ id, name: id }, []);

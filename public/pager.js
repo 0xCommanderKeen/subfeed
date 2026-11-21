@@ -1,20 +1,22 @@
 import { el, fill } from './dom.js';
 
 // `more` in `onPage(page, more)` loads the next page, for a button. `failure(err)` is what the sentinel shows
-// above Try again.
-export function pager({ sentinel, rootMargin, isCurrent, fetchPage, onPage, failure }) {
+// above Try again. `placeholder(first)` is what it shows while a page loads; `first` is true until a page is in.
+export function pager({ sentinel, rootMargin, isCurrent, fetchPage, onPage, failure, placeholder = () => 'Loading…' }) {
   let cursor = null;
   let loading = false;
+  let first = true;
   const observer = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && more(), { rootMargin });
   async function more() {
     if (loading) return;
     loading = true;
-    fill(sentinel, 'Loading…');
+    fill(sentinel, placeholder(first));
     let failed = false;
     try {
       const page = await fetchPage(cursor);
       if (!isCurrent()) return;
       cursor = page.nextCursor;
+      first = false;
       onPage(page, more);
     } catch (err) {
       failed = true;

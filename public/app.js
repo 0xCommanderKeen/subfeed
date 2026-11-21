@@ -9,6 +9,7 @@ import { playsHere, wantsTab } from './playback.js';
 import { openPlayer } from './player.js';
 import { SHORTCUTS, VIDEO_ITEM, shortcutAction, stepIndex } from './shortcuts.js';
 import { mountNav } from './sidebar.js';
+import { loadingMore, skeletonGrid, skeletonPage, skeletonQueue, skeletonShelves } from './skeleton.js';
 import { sortable } from './sortable.js';
 import { WORD, compact, fold, formatAge, formatDuration, plural, whole, wordsOf } from './vocab.js';
 
@@ -234,12 +235,13 @@ addEventListener('keydown', (e) => {
   else if (action === 'star') press('.star');
 });
 
-// Only a channel that failed two fetches in a row: a single failure is usually a slow YouTube, and the next refresh retries it.
+// Only a channel whose every fetch failed for a day: a few failed refreshes in a row are a slow YouTube or a busy server,
+// and the next refresh usually gets the feed.
 function renderNotice() {
-  const broken = state.meta.channels.filter((c) => c.failedRuns >= 2);
+  const broken = state.meta.channels.filter((c) => c.failingSince && Date.now() - Date.parse(c.failingSince) >= DAY);
   const names = broken.slice(0, 3).map((c) => c.name).join(', ') + (broken.length > 3 ? ` and ${plural(broken.length - 3, 'other')}` : '');
   fill($('notice'), ...(broken.length ? [
-    `${names} ${broken.length === 1 ? 'has' : 'have'} not updated for a while. `,
+    `${names} could not be fetched for over a day. `,
     el('a', { href: 'manage.html', textContent: 'See Manage' }),
   ] : []));
 }
@@ -566,12 +568,13 @@ const withChannels = async (page) => {
 
 // A search's first page carries its total, which replaces `total` and goes to `onTotal`.
 // Its requests stop when the next render starts, so the server drops a search typed past before it runs.
-function pages({ path, params, generation, sentinel, append, total, onEmpty, onTotal, moreLabel = 'Load older' }) {
+function pages({ path, params, generation, sentinel, append, total, onEmpty, onTotal, moreLabel = 'Load older', skeleton = {} }) {
   let loaded = 0;
   let capped = false;
   const { signal } = renderAbort;
   pager({
     sentinel, rootMargin: '1200px', isCurrent: () => isCurrentRender(generation),
+    placeholder: (first) => (first ? skeletonGrid(skeleton) : loadingMore()),
     fetchPage: (cursor) => {
       const q = new URLSearchParams(params);
       if (cursor) q.set('before', cursor);
@@ -630,6 +633,7 @@ function renderShelves(group, generation) {
   const shown = new Set();
   pager({
     sentinel, rootMargin: '1600px', isCurrent: () => isCurrentRender(generation),
+    placeholder: (first) => (first ? skeletonShelves() : loadingMore('Loading more channels')),
     fetchPage: (cursor) => api('GET', `/api/shelves?${listQuery({ ...group.params, perChannel: PER_SHELF, channels: SHELF_PAGE, ...(cursor && { after: cursor }) })}`).then(withChannels),
     onPage: (page, more) => {
       list.append(...page.shelves.map((s, i) => shelf(s, since, i)));
@@ -694,6 +698,7 @@ function renderFeed(group, generation) {
       ? sectionedAppender(body, { sectionOf: () => HOT_SECTION, since, visitRule: false, withChannel: true })
       : sectionedAppender(body, { sectionOf: period, since, withChannel: true }),
     onEmpty: () => emptyState(group),
+    skeleton: { withChannel: true },
     ...(hot && { moreLabel: 'Load more' }),
   });
 }
@@ -728,6 +733,7 @@ function renderChannel(group, channelId, generation) {
     // Opened from a topic's group, the channel lists what the group's rules let in, as its chip counts.
     path: '/api/videos', params: listQuery({ channel: channelId, ...(group.params.topic && { topic: group.params.topic }), limit: PAGE }), generation, sentinel, total: knownTotal(total),
     append: sectionedAppender(body, { sectionOf: month, since, gridClass: 'grid compact' }),
+    skeleton: { gridClass: 'grid compact', cards: 10 },
     onEmpty: () => emptyBlock('No videos',
       state.length !== 'any' ? `None of this channel's videos is ${LENGTHS[state.length].title.toLowerCase()} long.`
       : watchedHidden ? 'You have watched every video here, and watched videos are hidden.'
@@ -759,6 +765,7 @@ function renderSearch(group, q, generation) {
   pages({
     path: '/api/videos', params: listQuery({ ...group.params, q, limit: PAGE }), generation, sentinel, total: null,
     append: sectionedAppender(body, { sectionOf: bestMatches, withChannel: true, words: searchWords(q) }),
+    skeleton: { withChannel: true },
     onTotal: (n, capped) => fill(count, el('b', { textContent: capped ? `${whole.format(n)}+ matches` : plural(n, 'match', 'matches') }), ` in ${scope}.`),
     onEmpty: () => emptyBlock('No matches', `No title or description in ${scope} matches “${q}”.`),
   });
@@ -773,7 +780,7 @@ const playerDone = (v) => v.queued && (queueView ? queueView.take(v, 'Watched') 
 function renderQueue(group, generation) {
   const order = state.queueOrder;
   const movable = order === 'queue';
-  const lede = el('p', { className: 'lede', textContent: 'Loading…' });
+  const lede = el('p', { className: 'lede' }, el('span', { className: 'skel-box skel-line lede', ariaHidden: 'true' }));
   const list = el('ol', { className: 'queue' });
   const body = el('div', {});
   const orderSwitch = segmented({
@@ -786,6 +793,7 @@ function renderQueue(group, generation) {
     },
   });
   fill(main, el('section', { className: 'hero' }, el('h1', { textContent: group.title }), lede, el('div', { className: 'hero-tools' }, orderSwitch)), body);
+  fill(body, skeletonQueue());
 
   const rows = () => [...list.children];
   const idAfter = (row) => row?.nextElementSibling?.dataset.id ?? null;
@@ -889,7 +897,9 @@ function renderQueue(group, generation) {
     fill(body, list);
     syncLede();
   }, (err) => {
-    if (isCurrentRender(generation)) fill(body, emptyBlock('Could not load', err.message));
+    if (!isCurrentRender(generation)) return;
+    lede.textContent = '';
+    fill(body, emptyBlock('Could not load', err.message));
   });
 }
 
@@ -933,11 +943,12 @@ function setMeta(meta) {
 // sidebar, and the page stays as it was.
 async function load(refresh = false) {
   nav.setRefreshing(true);
-  if (!state.meta) fill(main, el('p', { className: 'empty', textContent: 'Fetching your channels…' }));
+  if (!state.meta) fill(main, skeletonPage());
   try {
     let meta = await api('GET', '/api/meta');
     // Only an empty database waits for the startup refresh (the server shares the in-flight run). After a
     // restart the stored videos show at once, even though this server has not refreshed yet.
+    if (!state.meta && !meta.totalVideos && meta.channels.length) fill(main, skeletonPage('Fetching your channels for the first time. This takes a moment.'));
     if (refresh || !meta.totalVideos) meta = await api('POST', '/api/refresh');
     setMeta(meta);
     applyRoute();

@@ -3,6 +3,7 @@ import { api, channelHead, channelLink, el, failed, fill, finePointer, icon, pre
 import { buildGroups, visibleCount } from './groups.js';
 import { mountImport } from './import.js';
 import { mountNav } from './sidebar.js';
+import { skeletonChannels } from './skeleton.js';
 import { sortable } from './sortable.js';
 import { plural, whole } from './vocab.js';
 
@@ -596,5 +597,9 @@ if (shared.has('add')) {
   els.addInput.focus();
 }
 
-load().catch((err) => (els.notice.textContent = `Could not load channels: ${err.message}`));
+fill(els.channels, skeletonChannels());
+load().catch((err) => {
+  els.notice.textContent = `Could not load channels: ${err.message}`;
+  fill(els.channels);
+});
 registerServiceWorker();

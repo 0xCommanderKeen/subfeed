@@ -20,6 +20,8 @@ Each group has two views. Switch between them with **Shelves | Feed** under the 
 - **Shelves** shows one row per channel, the channel with the newest upload first. Each row holds the channel's 12 latest videos and ends in a See all tile. Scroll a row sideways, or use the arrows on a wide screen. Quiet channels, with no videos in the current filter, are listed by name at the bottom.
 - **Feed** shows the group's videos as one grid, newest first, under the headings Today, Yesterday, This week, Last week, and then one per month. More videos load as you scroll, back to the oldest stored video. With an API key, **Newest | Hot** next to the view switch sorts the Feed. See [Hot](#hot).
 
+While a page loads, grey outlines of its cards, shelves or rows stand in for them, so the layout does not jump when the videos arrive. Three dots under a list mean that the next page of it is loading.
+
 Next to the view switch, **Any | <15m | 15–45m | 45m+** filters the videos by length: any length, under 15 minutes, 15 to 45 minutes, or over 45 minutes. The filter applies to Shelves, Feed, channel pages, and search, and the page remembers it. Videos with an unknown duration appear only under Any. The video counts in the sidebar, on the chips, and on See all do not follow the filter.
 
 The row of channel chips under the heading lists the group's channels with their video counts. Click a chip, a channel name, or See all to open the channel page. It shows the channel's whole history by month, loading older months as you scroll, with a star to make the channel a favorite, a link to the channel on YouTube, and an Unsubscribe button. Unsubscribe returns to the group, and a message at the bottom of the page offers Undo for six seconds (it asks first while the channel's backfill runs or waits, since Undo does not restart it); after that, resubscribe on the Manage page. The length filter is next to these. Click the pressed chip, or the back link, to return to the group. The browser back button also works.
@@ -42,7 +44,7 @@ Other controls, at the bottom of the sidebar:
 - **Refresh** reads every channel's feeds now instead of waiting for the next 30-minute refresh. It shows the time of the last refresh, and under its name the YouTube Data API units used today. See [Durations and kinds](youtube-api.md#durations-and-kinds).
 - **Manage** opens the channel and topic page.
 
-A notice at the top of the page names the channels whose feed failed in two refreshes in a row and links to Manage, which shows each channel's error. A channel that fails once is not named: a slow YouTube answer often times out a few channels, most of all in the first refresh after a restart, and the next refresh retries them.
+A notice at the top of the page names the channels whose feed failed in every refresh for a day and links to Manage, which shows each channel's error. A channel that failed a few refreshes in a row is not named: a slow YouTube answer or a busy server times out a few channels now and then, and a later refresh gets them. The count starts again when the server restarts.
 
 ### Keyboard shortcuts
 

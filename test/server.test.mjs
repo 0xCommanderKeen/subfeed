@@ -364,20 +364,24 @@ test('a refresh where one channel fails stores the others and reports the failur
   assert.equal(body.lastRefresh, NOW.toISOString());
   assert.equal(body.totalVideos, 1);
   assert.deepEqual(
-    [channelIn(body.channels, A), channelIn(body.channels, B)].map(({ ok, error, failedRuns, lastFetched, counts }) => ({ ok, error, failedRuns, lastFetched, long: counts.long })),
+    [channelIn(body.channels, A), channelIn(body.channels, B)].map(({ ok, error, failingSince, lastFetched, counts }) => ({ ok, error, failingSince, lastFetched, long: counts.long })),
     [
-      { ok: true, error: undefined, failedRuns: 0, lastFetched: NOW.toISOString(), long: 1 },
-      { ok: false, error: 'HTTP 500', failedRuns: 1, lastFetched: null, long: 0 },
+      { ok: true, error: undefined, failingSince: null, lastFetched: NOW.toISOString(), long: 1 },
+      { ok: false, error: 'HTTP 500', failingSince: NOW.toISOString(), lastFetched: null, long: 0 },
     ],
   );
 });
 
-test('failedRuns counts the refreshes in a row that failed a channel and goes back to 0 when one succeeds', async (t) => {
-  const answers = [{ videos: [], error: 'timeout' }, { videos: [], error: 'timeout' }, { videos: [video(A, 1)], error: null }];
-  const s = await start(t, { channels: [A], fetchFeeds: async () => answers.shift() });
+test('failingSince keeps the time of the first refresh in a row that failed a channel and clears when one succeeds', async (t) => {
+  const answers = [{ videos: [], error: 'timeout' }, { videos: [], error: 'timeout' }, { videos: [video(A, 1)], error: null }, { videos: [], error: 'timeout' }];
+  let clock = NOW;
+  const s = await start(t, { channels: [A], now: () => clock, fetchFeeds: async () => answers.shift() });
   const runs = [];
-  for (let i = 0; i < 3; i++) runs.push(channelIn((await s.json('POST', '/api/refresh')).body.channels, A).failedRuns);
-  assert.deepEqual(runs, [1, 2, 0]);
+  for (let i = 0; i < 4; i++) {
+    clock = new Date(NOW.getTime() + i * 30 * 60_000);
+    runs.push(channelIn((await s.json('POST', '/api/refresh')).body.channels, A).failingSince);
+  }
+  assert.deepEqual(runs, [NOW.toISOString(), NOW.toISOString(), null, '2026-11-17T13:30:00.000Z']);
 });
 
 test('unsubscribing cancels a running backfill before its next API call', async (t) => {
